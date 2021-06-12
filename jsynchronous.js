@@ -1,5 +1,4 @@
 'use strict';
-const synchronizedObjects = {}  // key->value is syncedObject.hash->syncedObject
 
 class Change {
   constructor(jsync, objectHash, operation, prop, oldValue, value) {
@@ -17,14 +16,14 @@ class Change {
 
 class SyncedObject {
   constructor(jsync, original) {
-    this.hash = noCollisionHash(synchronizedObjects);
+    this.hash = noCollisionHash(jsync.objects);
     this.jsync = jsync;
     this.type = detailedType(original);
     this.reference = newCollection(this.type);
     this.parents = {};  // parents key->value corresponds to parentHash->[properties]
     this.proxy = undefined;
 
-    synchronizedObjects[this.hash] = this;
+    jsync.objects[this.hash] = this;
 
     enumerate(original, (value, prop) => {
       const type = detailedType(value);
@@ -35,7 +34,7 @@ class SyncedObject {
       } else if (type === 'object') {
         let syncedChild = value[jsynchronous.reserved_property];
         if (syncedChild === undefined) {
-          let syncedChild = new SyncedObject(jsync, value);
+          syncedChild = new SyncedObject(jsync, value);
           this.reference[prop] = syncedChild.proxy;
           syncedChild.linkParent(this, prop);
         } else {
@@ -54,34 +53,77 @@ class SyncedObject {
           return syncedObject;
         }
 
-        const reserved = syncedObject.jsync.reserved[prop];
-        if (reserved) {
-          return syncedObject.jsync[reserved];
+        if (isRoot(syncedObject)) {
+          const reserved = syncedObject.jsync.reserved[prop];
+          if (reserved) {
+            return syncedObject.jsync[reserved];
+          }
         }
-
-        // TODO: reservedword method calls go here.
 
         return obj[prop];
       },
       set(obj, prop, value) {
-console.log('SETTING', prop, value);
         const oldValue = obj[prop];
+        const oldType = detailedType(oldValue);
+
         const type = detailedType(value);
-        const primitive = isPrimitive(type);
 
-        // TODO: Link new untracked objects into this jsynchronous variable
-
-        if (syncedObject.jsync.reserved[prop]) {
-          throw `Cannot reassign the jsynchronous reserved word ${prop}. If you need to use this property, you can reassign it by specifying {${prop}: 'reassigned-${prop}'} in the options when calling jsynchronous() on a newly synchronized variable.`;
+        if (isRoot(syncedObject)) {
+          if (syncedObject.jsync.reserved[prop]) {
+            throw `Cannot reassign the jsynchronous reserved word ${prop}. If you need to use this property, you can reassign it by specifying {${prop}: 'reassigned-${prop}'} in the options when calling jsynchronous() on a newly synchronized variable.`;
+          }
         }
 
-        obj[prop] = value;
-        return true  // Indicate Success
+        if (isPrimitive(type)) {
+          obj[prop] = value;
+          return true  // Indicate Success
+        }
+
+        if (referencesAnotherJsynchronousVariable(value, syncedObject.jsync)) {
+          thow `Cannot reference a jsynchronous variable that's already being tracked by another synchronized variable.`;
+        }
+
+        let syncedValue = value[jsynchronous.reserved_property];
+        if (syncedValue === undefined) {
+          syncedValue = new SyncedObject(syncedObject.jsync, value);
+          obj[prop] = syncedValue.proxy;
+          syncedValue.linkParent(this, prop);
+        } else {
+          obj[prop] = syncedValue.proxy;
+          syncedValue.linkParent(this, prop);
+        }
+        
+        if (!isPrimitive(oldType)) {
+          let syncedOld = oldValue[jsynchronous.reserved_property];
+          // TODO: comment these throws out. They aren't errors, they're sanity checks
+          if (syncedOld === undefined) {
+            throw `Jsynchronous previously referenced variable was not being tracked.`
+          }
+
+          syncedOld.unlinkParent(syncedObject, prop);
+        }
+
+        // TODO: communicate these changes to client
+        syncedObject.jsync.communicate({set: prop, value});
+
+        return true
+
       },
       deleteProperty(obj, prop) {
-        if (syncedObject.jsync.reserved[prop]) {
-          throw `Cannot delete the jsynchronous reserved word ${prop}. If you need to use this property, you can reassign it by specifying {${prop}: 'reassigned-${prop}'} in the options when calling jsynchronous() on a newly synchronized variable.`;
+        const value = obj[prop]
+        const type = detailedType(value);
+        if (!isPrimitive(type)) {
+          let syncedObject = value[jsynchronous.reserved_property];
+          // TODO: comment these throws out. They aren't errors, they're sanity checks
+          if (syncedObject === undefined) {
+            throw `Jsynchronous previously referenced variable was not being tracked.`
+          }
+
+          syncedObject.unlinkParent(obj[jsynchronous.reserved_property], prop);
         }
+
+        // TODO: communicate these changes to client
+        syncedObject.jsync.communicate({set: prop, value});
 
         delete obj[prop];
         return true  // Indicate Success
@@ -108,6 +150,15 @@ console.log('SETTING', prop, value);
       } else {
         throw `Unlinking a jsynchronous variable from its parent, this.parent's properties is missing the unlinked prop.`;
       }
+
+      if (properties.length === 0) {
+        delete this.parents[parentHash];
+      }
+
+      if (Object.keys(this.parents).length === 0) {
+        // Prep for garbage collection
+        delete this.jsync.objects[this.hash];
+      }
     } else {
       throw `Unlinking a jsynchronous variable from its parent, this.parents is missing unlinked parent's properties.`;
     }
@@ -122,12 +173,16 @@ class JSynchronous {
     initial = initial || {}
     options = options || {}
 
+    this.objects = {};
     this.listeners = options.listeners || [];
     this.send = options.send || jsynchronous.send;
     this.wait = options.wait || false;
     this.buffer_time = options.buffer_time || 0;
 
-    // These variables are special method names on a jsynchronized variable. They will throw an error if you reassign these methods on the synchronized variable, so you can rename these methods by passing them into the options.
+    // You can reference jsynchronized variables from other places in your app. Be careful however, when assigning object and arrays to synchronized variables. The ALL of the contents will become visible to the connected clients.
+
+    // These variables are special method names on the root of a jsynchronized variable. They will throw an error if you reassign these methods, so you can rename these methods by passing them into the options.
+    // WARNING: Don't lose your root variable! The root is the only way to call these methods. 
     this.resyncReservedWord = options.resync || 'resync';
     this.jsyncReservedWord = options.jsync || 'jsync';
     this.unsyncReservedWord = options.unsync || 'unsync';
@@ -166,15 +221,15 @@ class JSynchronous {
     this.queuedCommunications.push(change);
 
     if (this.wait === false && this.bufferTimeout === undefined) {
-      this.bufferTimeout = setTimeout(this.sendPackets, buffer_time);
+      this.bufferTimeout = setTimeout(() => this.sendPackets(), this.buffer_time);
     }
   }
   sendPackets() {
     this.bufferTimeout = undefined;
-    const payload = this.queuedCommunications.map((change) => c.serialize());
-    if (payload.length > 0) {
-      console.log('Sending packets', payload);
-    }
+    this.send(this.listeners[0], this.queuedCommunications.map((a) => String(a)));
+    //const payload = this.queuedCommunications.map((change) => c.serialize());
+    //if (payload.length > 0) {
+    //}
   }
   start_sync(jsync) {
     return (websocket) => {
@@ -252,7 +307,6 @@ function isPrimitive(detailed) {
 }
 function detailedType(value) {
   const type = typeof value;
-console.log('deet', value, Array.isArray(value));
   if (type !== 'object') {
     return type;  // 'boolean' 'string' 'undefined' 'number' 'bigint' 'symbol'
   } else if (value === null) {
@@ -294,6 +348,19 @@ function alreadySynchronized(obj) {
   return findRecursively(obj, (v) => v[jsynchronous.reserved_property]);
 }
 
+function referencesAnotherJsynchronousVariable(obj, jsync) {
+  // Expects object array proxy or other enumerable.
+  return findRecursively(obj, (v) => {
+    const syncedObject = v[jsynchronous.reserved_property];
+    if (syncedObject) {
+      return syncedObject.jsync !== jsync
+    } else {
+      return false;
+    }
+  });
+}
+
+
 function enumerable(obj) {
   // TODO: support more enumerable types like sets or maps
   const type = detailedType(obj);
@@ -328,6 +395,7 @@ function recurse(obj, includeObj, terminateFunc, visited) {
   }
 
   enumerate(obj, (value, prop) => {
+    // TODO: indexOf() is an O(n) algorithm. Maybe more efficient as a Map? Only testing can truly say
     if (enumerable(value) && visited.indexOf(value) === -1) {
       recurse(value, true, terminateFunc, visited);
     }
@@ -341,4 +409,7 @@ function findRecursively(obj, conditionFunc) {
   if (conditionFunc(visited[visited.length-1])) {
     return visited[visited.length-1];
   }
+}
+function isRoot(syncedObject) {
+  return (syncedObject.jsync.root === syncedObject.proxy);
 }
