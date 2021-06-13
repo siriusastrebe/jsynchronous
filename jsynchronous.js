@@ -347,12 +347,18 @@ class JSynchronous {
     }
   }
   j_sync(websocket) {
-    // Adds the websocket client to a list of websockets to call send(websocket, data) to
-    const index = this.listeners.indexOf(websocket);
-    if (index === -1) {
-      this.listeners.push(websocket);
+    if (Array.isArray(websocket)) {
+      websocket.forEach((ws) => {
+        this.j_sync(ws);
+      });
     } else {
-      throw 'jsynchronous Error in .jsync(websocket), websocket is already being listened on: ' + websocket;
+      // Adds the websocket client to a list of websockets to call send(websocket, data) to
+      const index = this.listeners.indexOf(websocket);
+      if (index === -1) {
+        this.listeners.push(websocket);
+      } else {
+        throw 'jsynchronous Error in .jsync(websocket), websocket is already being listened on: ' + websocket;
+      }
     }
   }
   un_sync() {

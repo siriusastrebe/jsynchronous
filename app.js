@@ -6,6 +6,12 @@ const util = require('util');
 const app = express();
 const port = 3000;
 
+//app.get('/socket.io/socket.io.js', (req, res) => {
+//  res.sendFile(__dirname + '/node_modules/index.html');
+//})
+
+
+
 jsynchronous.send = (websocket, data) => {
   console.log('sending it bruuhhh', websocket, data);
 }
@@ -53,6 +59,16 @@ app.get('/jsynchronous-client.js', (req, res) => {
   res.sendFile(__dirname + '/jsynchronous-client.js');
 })
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`);
 })
+
+// Socket.io
+const { Server } = require("socket.io");
+const io = new Server(server);
+io.on('connection', (socket) => {
+  socket.emit('msg', {z: 'z', y: 'y'});
+  console.log('a user connected');
+});
+
+
