@@ -1,6 +1,19 @@
 'use strict';
 
+const ACRONYMS = {
+  'boolean': 'b',
+  'string': 's',
+  'number': 'n',
+  'bigint': 'b',
+  'null': 'n',
+  'undefined': 'u',
+  'empty': 'e',
+  'object': 'o',
+  'array': 'a'
+}
+
 const syncedNames = {};
+
 
 class Change {
   constructor(jsync, objectHash, operation, prop, oldValue, oldType, value, type) {
@@ -34,7 +47,7 @@ class SyncedObject {
     this.hash = noCollisionHash(jsync.objects);
     this.jsync = jsync;
     this.type = detailedType(original);
-    this.reference = newCollection(this.type);
+    this.reference = newCollection(this.type, original);
     this.parents = {};  // parents key->value corresponds to parentHash->[properties]
     this.proxy = undefined;
 
@@ -51,6 +64,7 @@ class SyncedObject {
         if (syncedChild === undefined) {
           syncedChild = new SyncedObject(jsync, value);
           this.reference[prop] = syncedChild.proxy;
+          console.log(prop, this.reference);
           syncedChild.linkParent(this, prop);
         } else {
           this.reference[prop] = syncedChild.proxy;
@@ -119,7 +133,7 @@ class SyncedObject {
         }
 
         // TODO: communicate these changes to client
-        syncedObject.jsync.communicate({set: prop, value});
+        //syncedObject.jsync.communicate({set: prop, value});
 
         return true
 
@@ -138,7 +152,7 @@ class SyncedObject {
         }
 
         // TODO: communicate these changes to client
-        syncedObject.jsync.communicate({set: prop, value});
+        //syncedObject.jsync.communicate({set: prop, value});
 
         delete obj[prop];
         return true  // Indicate Success
@@ -181,21 +195,20 @@ class SyncedObject {
   describe() {
     const state = {
       h: this.hash,
-      t: this.type,
-      e: newCollection(this.type)
+      t: ACRONYMS[this.type],
+      e: newCollection(this.type, this.proxy)
     }
 
     enumerate(this.proxy, (value, prop) => {
       const type = detailedType(value);
       const primitive = isPrimitive(type);
-      const each = state.e;
 
-      if (primitive) { 
-        each[prop] = {t: type}
+      if (primitive) {
+        state.e[prop] = {t: ACRONYMS[type]}
 
-        if (type === 'string' || type === 'number') each[prop].v = value;
-        if (type === 'boolean') each[prop].v = !!value ? 1 : 0;
-        if (type === 'bigint')  each[prop].v = String(value) + 'n';
+        if (type === 'string' || type === 'number') state.e[prop].v = value;
+        if (type === 'boolean') state.e[prop].v = !!value ? 1 : 0;
+        if (type === 'bigint')  state.e[prop].v = String(value) + 'n';
       } else {
         const syncedObject = value[jsynchronous.reserved_property];
 
@@ -203,9 +216,25 @@ class SyncedObject {
           throw `Jsynchronous sanity error - synced object is referencing a non-synced variable.`;
         }
 
-        each[prop] = [syncedObject.hash];  // Via convention any syncedObject reference is wrapped in an array to indicate it's not a primitive.
+        state.e[prop] = [syncedObject.hash];  // Via convention any syncedObject reference is wrapped in an array to indicate it's not a primitive.
       }
     });
+
+    if (this.type === 'array') {
+      // We need to specify which array elements are empty, and which are undefined. They both end up as 'null' in JSON.stringify();
+      let allKeys;
+      for (let i=0; i<this.proxy.length; i++) {
+        const value = this.proxy[i];
+        if (value === undefined) {
+          allKeys = allKeys || Object.keys(this.proxy).map(k => Number(k));
+          if (binarySearch(allKeys, i) >= 0) { 
+            state.e[i] = ACRONYMS['undefined'];
+          } else {
+            state.e[i] = ACRONYMS['empty'];
+          }
+        }
+      }
+    }
 
     return state;
   }
@@ -251,6 +280,10 @@ class JSynchronous {
     this.bufferTimeout = undefined;
     this.queuedCommunications = [];
     this.root = undefined;
+
+    if (!enumerable(initial)) {
+      throw `Cannot jsynchronize variables of type ${detailedType(initial)}. Try placing it in an object, or an array and then calling jsynchronous().`;
+    }
 
     if (initial[jsynchronous.reserved_property]) {
       throw `Cannot jsynchronize an already synchronized variable`;
@@ -319,12 +352,12 @@ class JSynchronous {
   describe() {
     const fullState = {
       name: this.name,
-      count: this.changeCounter
+      c: this.changeCounter
     }
 
     const variables = recurse(this.root, true);
 
-    fullState.variables = variables.map((v) => {
+    fullState.nodes = variables.map((v) => {
       const syncedObject = v[jsynchronous.reserved_property];
       if (syncedObject === undefined) {
          throw `Jsynchronous sanity error - describe encountered a variable that was not being tracked.`;
@@ -365,6 +398,21 @@ function noCollisionHash(existingHashes) {
 function randomHash() {
   // Returns a 0-9a-f string between 9-12 characters in length
   return Math.random().toString(36).substring(2, 10);
+}
+function binarySearch(sortedArray, key){
+  let start = 0;
+  let end = sortedArray.length - 1;
+  while (start <= end) {
+    let middle = Math.floor((start + end) / 2);
+    if (sortedArray[middle] === key) {
+      return middle;
+    } else if (sortedArray[middle] < key) {
+      start = middle + 1;
+    } else {
+      end = middle - 1;
+    }
+  }
+  return -1;
 }
 
 function isPrimitive(detailed) {
@@ -411,10 +459,10 @@ function detailedType(value) {
 }
 
 
-function newCollection(type) {
+function newCollection(type, original) {
   // TODO: support more enumerable types like sets or maps
   if (type === 'array') {
-    return [];
+    return new Array(original.length);
   } else if (type === 'object') {
     return {};
   }
