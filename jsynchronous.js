@@ -1,27 +1,26 @@
 'use strict';
 
 const ACRONYMS = {
+  'array': 'a',
   'boolean': 'b',
-  'string': 's',
-  'number': 'n',
-  'bigint': 'b',
-  'null': 'n',
-  'undefined': 'u',
+  'bigint': 'bi',
   'empty': 'e',
   'object': 'o',
-  'array': 'a'
+  'number': 'n',
+  'string': 's',
+  'undefined': 'u',
+  'null': null  // null is a valid JSON identifier
 }
 
 const syncedNames = {};
 
 
 class Change {
-  constructor(jsync, objectHash, operation, prop, oldValue, oldType, value, type) {
+  constructor(jsync, objectHash, operation, prop, value, type, oldValue, oldType) {
     // A change exists in the space of two snapshots in time for objects that may not exist earlier or later.
     // It's important for garbage collection that a change does not directly reference any objects or arrays, only hashes.
     this.id = jsync.changeCounter++;
     this.time = new Date().getTime();
-    this.jsync = jsync;
     this.hash = objectHash;
     this.operation = operation;  // set, delete, pop, shift, unshift, etc.
     this.prop = prop;
@@ -30,46 +29,63 @@ class Change {
     this.type = type;
     this.oldType = oldType;
 
-    jsync.history.push(this);
-
-    if (jsync.wait === false) {
-      jsync.communicate(this.serialize());
-    }
+    jsync.communicate(this);
   }
   serialize() {
-    const change = {
-      id: this.id,
-      h: this.hash,
-      op: this.operation,
-      p: this.prop,
-      t: ACRONYMS[this.type],
-      ot: ACRONYMS[this.oldType]
-    }
-
-    if (isPrimitive(this.type)) {
-      change.v = serializePrimitive(this.value, this.type);
-    } else {
-      change.v = this.value; 
-    }
-
-    if (this.oldType !== 'undefined') {
-      if (isPrimitive(this.oldType)) {
-        change.ov = serializePrimitive(this.value, this.oldType);
-      } else {
-        change.ov = this.oldValue;
-      }
-    }
+    const change = [
+      this.id,
+      this.hash,
+      this.operation.substring(0, 3),
+      this.prop,
+      isPrimitive(this.type) ? serializePrimitive(this.value, this.type) : [this.value],
+      isPrimitive(this.oldType) ? serializePrimitive(this.oldValue, this.oldType) : [this.oldValue]
+    ]
 
     return change;
   }
 }
 
 class Creation {
-  constructor(jsync) {
+  constructor(jsync, syncedObject) {
+    this.id = jsync.changeCounter++;
+    this.time = new Date().getTime();
+    this.operation = 'new';
+    this.description = syncedObject.describe();  // Description is stored in short-hand format. There is no long-hand format for a syncedObject description.
+
+    jsync.communicate(this);
+  }
+  serialize() {
+    const creation = [
+      this.id,
+      this.description.h,
+      'new',
+      this.description.t,
+      this.description.e
+    ]
+    return creation;
   }
 }
 
 class Deletion {
+  constructor(jsync, syncedObject) {
+    // We are expecting that no references exist to this variable any longer
+    this.id = jsync.changeCounter++;
+    this.operation = 'end'; 
+    this.time = new Date().getTime();
+    this.hash = syncedObject.hash;
+
+    jsync.communicate(this);
+
+    delete jsync.objects[this.hash];
+  }
+  serialize() {
+    const deletion = [
+      this.id,
+      this.hash,
+      'end'
+    ]
+    return deletion;
+  }
 }
 
 class SyncedObject {
@@ -86,7 +102,7 @@ class SyncedObject {
     enumerate(original, (value, prop) => {
       const type = detailedType(value);
       const primitive = isPrimitive(type);
-      
+
       if (primitive) { 
         this.reference[prop] = value;
       } else if (type === 'object' || type === 'array') {  // TODO: Support more enumerable types
@@ -104,6 +120,8 @@ class SyncedObject {
     });
 
     this.proxy = new Proxy(this.reference, this.handler(this));
+
+    new Creation(jsync, this);
   }
   handler(syncedObject) {
     return {
@@ -149,20 +167,21 @@ class SyncedObject {
             syncedValue.linkParent(syncedObject, prop);
           }
 
-          if (!isPrimitive(oldType)) {
-            let syncedOld = oldValue[jsynchronous.reserved_property];
-            // TODO: comment these throws out. They aren't errors, they're sanity checks
-            if (syncedOld === undefined) {
-              throw `Jsynchronous sanity error - previously referenced variable was not being tracked.`
-            }
-
-            syncedOld.unlinkParent(syncedObject, prop);
-          }
         }
 
         // TODO: Detect array operations: splice, shift, unshift, length
         const operation = 'set';
-        const change = new Change(syncedObject.jsync, syncedObject.hash, operation, prop, flat(oldValue), oldType, flat(obj[prop]), type);
+        new Change(syncedObject.jsync, syncedObject.hash, operation, prop, flat(obj[prop]), type, flat(oldValue), oldType);
+
+        if (!isPrimitive(oldType)) {
+          let syncedOld = oldValue[jsynchronous.reserved_property];
+          // TODO: comment these throws out. They aren't errors, they're sanity checks
+          if (syncedOld === undefined) {
+            throw `Jsynchronous sanity error - previously referenced variable was not being tracked.`
+          }
+
+          syncedOld.unlinkParent(syncedObject, prop);
+        }
 
         return true;
       },
@@ -180,7 +199,7 @@ class SyncedObject {
         }
 
         const operation = 'delete';
-        const change = new Change(syncedObject.jsync, syncedObject.hash, operation, prop, flat(oldValue), oldType, flat(value), type);
+        const change = new Change(syncedObject.jsync, syncedObject.hash, operation, prop, flat(value), type);
 
         delete obj[prop];
         return true  // Indicate Success
@@ -214,7 +233,7 @@ class SyncedObject {
 
       if (Object.keys(this.parents).length === 0) {
         // Prep for garbage collection
-        delete this.jsync.objects[this.hash];
+        new Deletion(this.jsync, this);
       }
     } else {
       throw `Unlinking a jsynchronous variable from its parent, this.parents is missing unlinked parent's properties.`;
@@ -260,22 +279,19 @@ class JSynchronous {
     // You can reference jsynchronized variables from other places in your app. Be careful however, when assigning object and arrays to synchronized variables. The ALL of the contents will become visible to the connected clients.
 
     // These variables are special method names on the root of a jsynchronized variable. They will throw an error if you reassign these methods, so you can rename these methods by passing them into the options.
-    this.jsyncReservedWord = options.jsync || 'jsync';
-    this.resyncReservedWord = options.resync || 'resync';
-    this.unsyncReservedWord = options.unsync || 'unsync';
-    this.startsyncReservedWord = options.startsync || 'startsync';
+    this.jsyncReservedWord = options.jsync || '$sync';
+    this.resyncReservedWord = options.resync || '$resync';
+    this.unsyncReservedWord = options.unsync || '$unsync';
+    this.startsyncReservedWord = options.startsync || '$startsync';
+    this.listenersReservedWord = options.listeners || '$listeners';
 
     // Cerce this. to refer to this jsynchronous instance
-    this.jsync = ((a) => this.j_sync(a));
-    this.resync = ((a) => this.re_sync(a));
-    this.unsync = ((a) => this.un_sync(a));
-    this.startsync = ((a) => this.start_sync(a));
-
     this.reserved = {}
-    this.reserved[this.jsyncReservedWord] = this.jsync;
-    this.reserved[this.resyncReservedWord] = this.resync;
-    this.reserved[this.unsyncReservedWord] = this.unsync;
-    this.reserved[this.startsyncReservedWord] = this.startsync; 
+    this.reserved[this.jsyncReservedWord]     = ((a) => this.j_sync(a));
+    this.reserved[this.resyncReservedWord]    = ((a) => this.re_sync(a));
+    this.reserved[this.unsyncReservedWord]    = ((a) => this.un_sync(a));
+    this.reserved[this.startsyncReservedWord] = ((a) => this.start_sync(a));
+    this.reserved[this.listenersReservedWord] = (() => this.listeners);
 
     this.bufferTimeout = undefined;
     this.queuedCommunications = [];
@@ -305,15 +321,19 @@ class JSynchronous {
     this.root = new SyncedObject(this, initial).proxy;
   }
   communicate(change) {
-    this.queuedCommunications.push(change);
+    if (this.wait === false) {
+      this.history.push(change);
+      this.queuedCommunications.push(change.serialize());
 
-    if (this.wait === false && this.bufferTimeout === undefined) {
-      this.bufferTimeout = setTimeout(() => this.sendPackets(), this.buffer_time);
+      if (this.bufferTimeout === undefined) {
+        this.bufferTimeout = setTimeout(() => this.sendPackets(), this.buffer_time);
+      }
     }
   }
   sendPackets() {
     this.bufferTimeout = undefined;
     this.send(this.listeners[0], this.queuedCommunications.map((a) => JSON.stringify(a)));
+    this.queuedCommunications.length = 0;
   }
   start_sync(jsync) {
     return (websocket) => {
@@ -322,8 +342,8 @@ class JSynchronous {
         throw `jsynchronize requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmitied to connected clients. Use syncedVariable.jsync(websocket) to add a websocket to connected clients.`;
       }
 
-      this.wait = false;
       this.sendPackets();
+      this.wait = false;
     }
   }
   j_sync(websocket) {
@@ -353,7 +373,7 @@ class JSynchronous {
 
     const variables = recurse(this.root, true);
 
-    fullState.nodes = variables.map((v) => {
+    fullState.e = variables.map((v) => {
       const syncedObject = v[jsynchronous.reserved_property];
       if (syncedObject === undefined) {
          throw `Jsynchronous sanity error - describe encountered a variable that was not being tracked.`;

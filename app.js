@@ -20,10 +20,19 @@ gameState['ball']['acceleration'] = [0.01, 0, -0.01];
 
 gameState['ball']['acceleration'] = [99, 99, 99];
 
-gameState['ball']['acceleration'].push(gameState.ball);
-
 console.log('Description', util.inspect(gameState['__jsynchronous__'].jsync.describe(), {showHidden: false, depth: null, colors: true}));
 
+
+//gameState.$sync('rando');
+//console.log(gameState.$listeners('rando'));
+
+gameState['extra'] = [];
+setInterval(() => {
+  gameState['extra'].push(Math.random());
+  if (Math.random() < 0.4) {
+  gameState['extra'].sort();
+  }
+}, 6000);
 
 //console.log('Changes', util.inspect(, {showHidden: false, depth: null, colors: true}));
 //console.log(gameState['__jsynchronous__'].jsync.history);
