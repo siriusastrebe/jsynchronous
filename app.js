@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const jsynchronous = require('./jsynchronous.js');
+const util = require('util');
 
 const app = express();
 const port = 3000;
@@ -9,14 +10,22 @@ jsynchronous.send = (websocket, data) => {
   console.log('sending it bruuhhh', websocket, data);
 }
 
-const startState = {ball: {postion: {x: 10, y: 12, z: -2.4}}}
-const gameState = jsynchronous(startState);
-
-console.log('synced', gameState);
-gameState['ball']['velocity'] = {x: -0.4, y: 1.1, z: 0}
-console.log('synced', gameState);
+const gameState = jsynchronous({ball: {position: [10, 12, 2.4]}});
 
 
+gameState.countdown = [3, 2, 1, {lift: 'off'}];
+
+gameState['ball']['velocity'] = [-0.4, 1.1, 0]
+
+
+gameState['z'] = new Array(8);
+gameState['z'].push('goal!');
+
+console.log('Description', util.inspect(gameState['__jsynchronous__'].jsync.describe(), {showHidden: false, depth: null, colors: true}));
+console.log(gameState['z'], gameState['z'].length)
+
+// synced = [{hidden: gameState}];
+// gameState.ball.position.z = synced
 
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/index.html');
