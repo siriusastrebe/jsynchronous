@@ -22,20 +22,50 @@ class Change {
     this.id = jsync.changeCounter++;
     this.time = new Date().getTime();
     this.jsync = jsync;
-    this.objectHash = objectHash;
+    this.hash = objectHash;
     this.operation = operation;  // set, delete, pop, shift, unshift, etc.
     this.prop = prop;
     this.oldValue = oldValue;
     this.value = value;
     this.type = type;
     this.oldType = oldType;
+
+    jsync.history.push(this);
+
+    if (jsync.wait === false) {
+      jsync.communicate(this.serialize());
+    }
   }
   serialize() {
+    const change = {
+      id: this.id,
+      h: this.hash,
+      op: this.operation,
+      p: this.prop,
+      t: ACRONYMS[this.type],
+      ot: ACRONYMS[this.oldType]
+    }
+
+    if (isPrimitive(this.type)) {
+      change.v = serializePrimitive(this.value, this.type);
+    } else {
+      change.v = this.value; 
+    }
+
+    if (this.oldType !== 'undefined') {
+      if (isPrimitive(this.oldType)) {
+        change.ov = serializePrimitive(this.value, this.oldType);
+      } else {
+        change.ov = this.oldValue;
+      }
+    }
+
+    return change;
   }
 }
 
 class Creation {
-  constructor(jsync, ) {
+  constructor(jsync) {
   }
 }
 
@@ -94,7 +124,6 @@ class SyncedObject {
       set(obj, prop, value) {
         const oldValue = obj[prop];
         const oldType = detailedType(oldValue);
-
         const type = detailedType(value);
 
         if (isRoot(syncedObject)) {
@@ -105,38 +134,37 @@ class SyncedObject {
 
         if (isPrimitive(type)) {
           obj[prop] = value;
-          return true  // Indicate Success
-        }
-
-        if (referencesAnotherJsynchronousVariable(value, syncedObject.jsync)) {
-          throw `Cannot reference a jsynchronous variable that's already being tracked by another synchronized variable.`;
-        }
-
-        let syncedValue = value[jsynchronous.reserved_property];
-        if (syncedValue === undefined) {
-          syncedValue = new SyncedObject(syncedObject.jsync, value);
-          obj[prop] = syncedValue.proxy;
-          syncedValue.linkParent(this, prop);
         } else {
-          obj[prop] = syncedValue.proxy;
-          syncedValue.linkParent(this, prop);
-        }
-        
-        if (!isPrimitive(oldType)) {
-          let syncedOld = oldValue[jsynchronous.reserved_property];
-          // TODO: comment these throws out. They aren't errors, they're sanity checks
-          if (syncedOld === undefined) {
-            throw `Jsynchronous sanity error - previously referenced variable was not being tracked.`
+          if (referencesAnotherJsynchronousVariable(value, syncedObject.jsync)) {
+            throw `Cannot reference a jsynchronous variable that's already being tracked by another synchronized variable.`;
           }
 
-          syncedOld.unlinkParent(syncedObject, prop);
+          let syncedValue = value[jsynchronous.reserved_property];
+          if (syncedValue === undefined) {
+            syncedValue = new SyncedObject(syncedObject.jsync, value);
+            obj[prop] = syncedValue.proxy;
+            syncedValue.linkParent(syncedObject, prop);
+          } else {
+            obj[prop] = syncedValue.proxy;
+            syncedValue.linkParent(syncedObject, prop);
+          }
+
+          if (!isPrimitive(oldType)) {
+            let syncedOld = oldValue[jsynchronous.reserved_property];
+            // TODO: comment these throws out. They aren't errors, they're sanity checks
+            if (syncedOld === undefined) {
+              throw `Jsynchronous sanity error - previously referenced variable was not being tracked.`
+            }
+
+            syncedOld.unlinkParent(syncedObject, prop);
+          }
         }
 
-        // TODO: communicate these changes to client
-        //syncedObject.jsync.communicate({set: prop, value});
+        // TODO: Detect array operations: splice, shift, unshift, length
+        const operation = 'set';
+        const change = new Change(syncedObject.jsync, syncedObject.hash, operation, prop, flat(oldValue), oldType, flat(obj[prop]), type);
 
-        return true
-
+        return true;
       },
       deleteProperty(obj, prop) {
         const value = obj[prop]
@@ -151,8 +179,8 @@ class SyncedObject {
           syncedObject.unlinkParent(obj[jsynchronous.reserved_property], prop);
         }
 
-        // TODO: communicate these changes to client
-        //syncedObject.jsync.communicate({set: prop, value});
+        const operation = 'delete';
+        const change = new Change(syncedObject.jsync, syncedObject.hash, operation, prop, flat(oldValue), oldType, flat(value), type);
 
         delete obj[prop];
         return true  // Indicate Success
@@ -200,40 +228,11 @@ class SyncedObject {
     }
 
     enumerate(this.proxy, (value, prop) => {
-      const type = detailedType(value);
-      const primitive = isPrimitive(type);
-
-      if (primitive) {
-        state.e[prop] = {t: ACRONYMS[type]}
-
-        if (type === 'string' || type === 'number') state.e[prop].v = value;
-        if (type === 'boolean') state.e[prop].v = !!value ? 1 : 0;
-        if (type === 'bigint')  state.e[prop].v = String(value) + 'n';
-      } else {
-        const syncedObject = value[jsynchronous.reserved_property];
-
-        if (syncedObject === undefined) {
-          throw `Jsynchronous sanity error - synced object is referencing a non-synced variable.`;
-        }
-
-        state.e[prop] = [syncedObject.hash];  // Via convention any syncedObject reference is wrapped in an array to indicate it's not a primitive.
-      }
+      state.e[prop] = serialize(value);
     });
 
     if (this.type === 'array') {
-      // We need to specify which array elements are empty, and which are undefined. They both end up as 'null' in JSON.stringify();
-      let allKeys;
-      for (let i=0; i<this.proxy.length; i++) {
-        const value = this.proxy[i];
-        if (value === undefined) {
-          allKeys = allKeys || Object.keys(this.proxy).map(k => Number(k));
-          if (binarySearch(allKeys, i) >= 0) { 
-            state.e[i] = ACRONYMS['undefined'];
-          } else {
-            state.e[i] = ACRONYMS['empty'];
-          }
-        }
-      }
+      labelEmpty(this.proxy, state.e);  // We need to specify which array elements are empty, and which are undefined. They both end up as 'null' in JSON.stringify();
     }
 
     return state;
@@ -256,6 +255,7 @@ class JSynchronous {
     this.send = options.send || jsynchronous.send;
     this.wait = options.wait || false;
     this.buffer_time = options.buffer_time || 0;
+    this.history = [];
 
     // You can reference jsynchronized variables from other places in your app. Be careful however, when assigning object and arrays to synchronized variables. The ALL of the contents will become visible to the connected clients.
 
@@ -308,16 +308,12 @@ class JSynchronous {
     this.queuedCommunications.push(change);
 
     if (this.wait === false && this.bufferTimeout === undefined) {
-
       this.bufferTimeout = setTimeout(() => this.sendPackets(), this.buffer_time);
     }
   }
   sendPackets() {
     this.bufferTimeout = undefined;
     this.send(this.listeners[0], this.queuedCommunications.map((a) => JSON.stringify(a)));
-    //const payload = this.queuedCommunications.map((change) => c.serialize());
-    //if (payload.length > 0) {
-    //}
   }
   start_sync(jsync) {
     return (websocket) => {
@@ -536,4 +532,60 @@ function findRecursively(obj, conditionFunc) {
 }
 function isRoot(syncedObject) {
   return (syncedObject.jsync.root === syncedObject.proxy);
+}
+function flat(value) {
+  // Expects value to be either be a primitive or a syncedObject Proxy. Returns either the value if it's a primitive, or the variable's hash. 
+  const type = detailedType(value);
+  const primitive = isPrimitive(type);
+
+  if (primitive) {
+    return value;
+  } else {
+    const syncedObject = value[jsynchronous.reserved_property];
+    if (syncedObject === undefined) {
+      throw `Jsynchronous sanity error - syncedObject is referencing a non-synced variable.`;
+    }
+    return syncedObject.hash;
+  }
+}
+function labelEmpty(source, target) {
+  // We need to specify which array elements are empty, and which are undefined. They both end up as 'null' in JSON.stringify();
+  let allKeys;
+  for (let i=0; i<source.length; i++) {
+    const value = source[i];
+    if (value === undefined) {
+      allKeys = allKeys || Object.keys(source).map(k => Number(k));
+      if (binarySearch(allKeys, i) >= 0) { 
+        target[i] = ACRONYMS['undefined'];
+      } else {
+        target[i] = ACRONYMS['empty'];
+      }
+    }
+  }
+}
+function serialize(value) {
+  // Expects value to be either be a primitive or a syncedObject Proxy
+  const type = detailedType(value);
+
+  if (isPrimitive(type)) {
+    return serializePrimitive(value, type);
+  } else {
+    return serializeEnumerable(value);
+  }
+}
+function serializePrimitive(value, type) {
+  const serialized = {t: ACRONYMS[type]}
+  if (type === 'string' || type === 'number') serialized.v = value;
+  if (type === 'boolean') serialized.v = !!value ? 1 : 0;
+  if (type === 'bigint')  serialized.v = String(value) + 'n';
+  return serialized;
+}
+function serializeEnumerable(value) {
+  const syncedObject = value[jsynchronous.reserved_property];
+
+  if (syncedObject === undefined) {
+    throw `Jsynchronous sanity error - synced object is referencing a non-synced variable.`;
+  }
+
+  return [syncedObject.hash];  // Via convention any syncedObject reference is wrapped in an array to indicate it's not a primitive.
 }
