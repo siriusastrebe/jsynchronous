@@ -95,15 +95,20 @@ class Deletion {
 }
 
 class SyncedObject {
-  constructor(jsync, original) {
+  constructor(jsync, original, visited) {
     this.hash = noCollisionHash(jsync.objects);
     this.jsync = jsync;
     this.type = detailedType(original);
     this.reference = newCollection(this.type, original);
     this.parents = {};  // parents key->value corresponds to parentHash->[properties]
-    this.proxy = undefined;
+    this.proxy = new Proxy(this.reference, this.handler(this));
 
     jsync.objects[this.hash] = this;
+
+    if (visited === undefined) {
+      visited = new Map();
+      visited.set(original, this);
+    }
 
     enumerate(original, (value, prop) => {
       const type = detailedType(value);
@@ -114,9 +119,12 @@ class SyncedObject {
       } else if (type === 'object' || type === 'array') {  // TODO: Support more enumerable types
         let syncedChild = value[jsynchronous.reserved_property];
         if (syncedChild === undefined) {
-          syncedChild = new SyncedObject(jsync, value);
+          if (visited.has(value)) {
+            syncedChild = visited.get(value);
+          } else {
+            syncedChild = new SyncedObject(jsync, value, visited);
+          }
           this.reference[prop] = syncedChild.proxy;
-          console.log(prop, this.reference);
           syncedChild.linkParent(this, prop);
         } else {
           this.reference[prop] = syncedChild.proxy;
@@ -125,9 +133,9 @@ class SyncedObject {
       }
     });
 
-    this.proxy = new Proxy(this.reference, this.handler(this));
-
-    new Creation(jsync, this);
+    if (jsync.wait === false) {
+      new Creation(jsync, this);
+    }
   }
   handler(syncedObject) {
     return {
@@ -278,7 +286,7 @@ class JSynchronous {
     this.listeners = options.listeners || [];
     this.counter = 0;  // counter is always 1 more than the latest change's id.
     this.send = options.send || jsynchronous.send;
-    this.wait = options.wait || false;
+    this.wait = true;  // Ignore proxy setters while jsynchronous handles creation of the data structure
     this.buffer_time = options.buffer_time || 0;
     this.history = [];
 
@@ -327,6 +335,8 @@ class JSynchronous {
     syncedNames[this.name] = this;
 
     this.root = new SyncedObject(this, initial).proxy;
+
+    this.wait = options.wait;
   }
   communicate(change) {
     if (this.wait === false) {
