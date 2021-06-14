@@ -1,10 +1,15 @@
 <html>
 <script src="/socket.io/socket.io.js"></script>
+<script src="/jsynchronous-client.js"></script>
 <script>
-  var socket = io();
+  const socket = io();
+  const jsync = jsynchronous();
 
   socket.on('msg', function (a, b, c) {
     console.log(a, b, c);
+    jsync.onmessage(a);
+
+    console.log(jsync.get());
   });
 </script>
 <body>

@@ -16,12 +16,14 @@ const syncedNames = {};
 
 
 class Change {
-  constructor(jsync, objectHash, operation, prop, value, type, oldValue, oldType) {
+  constructor(syncedObject, operation, prop, value, type, oldValue, oldType) {
     // A change exists in the space of two snapshots in time for objects that may not exist earlier or later.
     // It's important for garbage collection that a change does not directly reference any objects or arrays, only hashes.
-    this.id = jsync.changeCounter++;
+    const jsync = syncedObject.jsync
+
+    this.id = jsync.counter++;
     this.time = new Date().getTime();
-    this.hash = objectHash;
+    this.hash = syncedObject.hash;
     this.operation = operation;  // set, delete, pop, shift, unshift, etc.
     this.prop = prop;
     this.oldValue = oldValue;
@@ -29,13 +31,17 @@ class Change {
     this.type = type;
     this.oldType = oldType;
 
+    if (Array.isArray(syncedObject.proxy) && !isNaN(prop) && Number.isInteger(Number(prop))) {
+      this.prop = Number(prop);  // Coerce prop to a number if it belongs to an array
+    }
+
     jsync.communicate(this);
   }
   serialize() {
     const change = [
       this.id,
-      this.hash,
       this.operation.substring(0, 3),
+      this.hash,
       this.prop,
       isPrimitive(this.type) ? serializePrimitive(this.value, this.type) : [this.value],
       isPrimitive(this.oldType) ? serializePrimitive(this.oldValue, this.oldType) : [this.oldValue]
@@ -47,7 +53,7 @@ class Change {
 
 class Creation {
   constructor(jsync, syncedObject) {
-    this.id = jsync.changeCounter++;
+    this.id = jsync.counter++;
     this.time = new Date().getTime();
     this.operation = 'new';
     this.description = syncedObject.describe();  // Description is stored in short-hand format. There is no long-hand format for a syncedObject description.
@@ -57,8 +63,8 @@ class Creation {
   serialize() {
     const creation = [
       this.id,
-      this.description.h,
       'new',
+      this.description.h,
       this.description.t,
       this.description.e
     ]
@@ -69,7 +75,7 @@ class Creation {
 class Deletion {
   constructor(jsync, syncedObject) {
     // We are expecting that no references exist to this variable any longer
-    this.id = jsync.changeCounter++;
+    this.id = jsync.counter++;
     this.operation = 'end'; 
     this.time = new Date().getTime();
     this.hash = syncedObject.hash;
@@ -81,8 +87,8 @@ class Deletion {
   serialize() {
     const deletion = [
       this.id,
-      this.hash,
-      'end'
+      'end',
+      this.hash
     ]
     return deletion;
   }
@@ -171,7 +177,7 @@ class SyncedObject {
 
         // TODO: Detect array operations: splice, shift, unshift, length
         const operation = 'set';
-        new Change(syncedObject.jsync, syncedObject.hash, operation, prop, flat(obj[prop]), type, flat(oldValue), oldType);
+        new Change(syncedObject, operation, prop, flat(obj[prop]), type, flat(oldValue), oldType);
 
         if (!isPrimitive(oldType)) {
           let syncedOld = oldValue[jsynchronous.reserved_property];
@@ -199,7 +205,7 @@ class SyncedObject {
         }
 
         const operation = 'delete';
-        const change = new Change(syncedObject.jsync, syncedObject.hash, operation, prop, flat(value), type);
+        const change = new Change(syncedObject, operation, prop, flat(value), type);
 
         delete obj[prop];
         return true  // Indicate Success
@@ -270,7 +276,7 @@ class JSynchronous {
     this.startTime = new Date().getTime();
     this.objects = {};
     this.listeners = options.listeners || [];
-    this.changeCounter = 0;  // changeCounter is always 1 more than the latest change's id.
+    this.counter = 0;  // counter is always 1 more than the latest change's id.
     this.send = options.send || jsynchronous.send;
     this.wait = options.wait || false;
     this.buffer_time = options.buffer_time || 0;
@@ -296,6 +302,8 @@ class JSynchronous {
     this.bufferTimeout = undefined;
     this.queuedCommunications = [];
     this.root = undefined;
+
+    this.cachedDescription = undefined;
 
     if (!enumerable(initial)) {
       throw `Cannot jsynchronize variables of type ${detailedType(initial)}. Try placing it in an object, or an array and then calling jsynchronous().`;
@@ -332,7 +340,12 @@ class JSynchronous {
   }
   sendPackets() {
     this.bufferTimeout = undefined;
-    this.send(this.listeners[0], this.queuedCommunications.map((a) => JSON.stringify(a)));
+
+    console.log('Payload length ', JSON.stringify(this.queuedCommunications).length);
+
+    this.listeners.forEach((listener) => {
+      this.send(listener, JSON.stringify(this.queuedCommunications));
+    });
     this.queuedCommunications.length = 0;
   }
   start_sync(jsync) {
@@ -348,17 +361,18 @@ class JSynchronous {
   }
   j_sync(websocket) {
     if (Array.isArray(websocket)) {
-      websocket.forEach((ws) => {
-        this.j_sync(ws);
-      });
+      websocket.forEach(ws => this.j_sync(ws));
     } else {
       // Adds the websocket client to a list of websockets to call send(websocket, data) to
       const index = this.listeners.indexOf(websocket);
       if (index === -1) {
         this.listeners.push(websocket);
       } else {
+        // TODO: Change this to a warn?
         throw 'jsynchronous Error in .jsync(websocket), websocket is already being listened on: ' + websocket;
       }
+
+      this.send(websocket, JSON.stringify(this.describe()));
     }
   }
   un_sync() {
@@ -366,15 +380,20 @@ class JSynchronous {
     if (index !== -1) {
       this.listeners.splice(index, 1);
     } else {
+      // TODO: Change this to a warn?
       throw 'jsynchronous Error in .unsync(websocket), no websocket registered that matches ' + websocket;
     }
   }
   re_sync() {
   }
   describe() {
+    if (this.cachedDescription && this.cachedDescription.c === this.counter) {
+      return this.cachedDescription
+    }
+
     const fullState = {
       name: this.name,
-      c: this.changeCounter
+      c: this.counter
     }
 
     const variables = recurse(this.root, true);
@@ -386,6 +405,8 @@ class JSynchronous {
       }
       return syncedObject.describe();
     });
+
+    this.cachedDescription = fullState;
 
     return fullState;
   }
