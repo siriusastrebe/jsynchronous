@@ -336,7 +336,7 @@ class JSynchronous {
 
     this.root = new SyncedObject(this, initial).proxy;
 
-    this.wait = options.wait;
+    this.wait = options.wait || false;
   }
   communicate(change) {
     if (this.wait === false) {
@@ -359,15 +359,13 @@ class JSynchronous {
     this.queuedCommunications.length = 0;
   }
   start_sync(jsync) {
-    return (websocket) => {
-      // If the constructor option {wait: true} was passed, starts sending packets to connected clients. 
-      if (this.send === undefined) {
-        throw `jsynchronize requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmitied to connected clients. Use syncedVariable.jsync(websocket) to add a websocket to connected clients.`;
-      }
-
-      this.sendPackets();
-      this.wait = false;
+    // If the constructor option {wait: true} was passed, starts sending packets to connected clients. 
+    if (this.send === undefined) {
+      throw `jsynchronize requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmitied to connected clients. Use syncedVariable.jsync(websocket) to add a websocket to connected clients.`;
     }
+
+    this.sendPackets();
+    this.wait = false;
   }
   j_sync(websocket) {
     if (Array.isArray(websocket)) {

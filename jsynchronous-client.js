@@ -104,16 +104,11 @@ console.log('onmessage', data);
     var references = jsync.staging.references;
     for (var j=0; j<references.length; j++) {
       var r = references[j];
-      var details = jsync.objects[r.hash];
-      if (details === undefined) {
-        throw "Jsynchronous error - Referenced variable can't be found with hash " + r.hash;
-      }
-      var variable = details.variable;
+      var variable = resolveSyncedVariable(r.hash, jsync);
       r.variable[r.prop] = variable;
     }
     jsync.staging.references.length = 0;
   }
-
   function processUpdates(data) {
     var name = data[0];
     var jsync = jsyncs[name];
@@ -128,8 +123,10 @@ console.log('onmessage', data);
       var op = change[1];
       var hash = change[2];
 
-      if (id !== jsync.counter) {// TODO: Handle missing ranges (broken TCP/IP connection)
+      if (id !== jsync.counter) {  // TODO: Handle missing ranges (broken TCP/IP connection)
         throw "Jsynchronous error - Updates came out of order. Expected " + jsync.counter + " got " + id + ". This means your TCP/IP connection was reset in your transport";
+      } else {
+        jsync.counter++;
       }
 
       if (op === 'set') {
@@ -142,8 +139,8 @@ console.log('onmessage', data);
         var oldDetails =  change[5];
         del(hash, prop, oldDetails, jsync);
       } else if (op === 'new') {
-        var type = change[4];
-        var each = change[5];
+        var type = change[3];
+        var each = change[4];
         newObject(hash, type, each, jsync);
       } else if (op === 'end') {
         endObject(hash, jsync);
@@ -154,17 +151,55 @@ console.log('onmessage', data);
 
     resolveReferences(jsync);
   }
-  
+
   function set(hash, prop, newDetails, oldDetails, jsync) {
-    jsync.objects
+    console.log('setting', hash, prop, newDetails, oldDetails)
+    var details = jsync.objects[hash];
+    if (details === undefined) {
+      throw "Jsynchronous error - Set for an object hash " + hash + " that is not registered with the synchronized variable by name " + jsync.name;
+    }
+
+    var object = details.variable;
+    var type = ACRONYMS[newDetails.t];
+
+    var value;
+
+    if (Array.isArray(newDetails)) {  // Via convention if a description is wrapped in an array, it's a reference to another object
+      value = resolveSyncedVariable(newDetails[0], jsync);
+    } else {
+      value = resolvePrimitive(type, newDetails.v);
+    }
+
+
+    object[prop] = value;
+    // TODO: Trigger .on() changes here
   }
   function del(hash, prop, jsync) {
+    console.log('deleting', hash, prop)
+    var details = jsync.objects[hash];
+    if (details === undefined) {
+      throw "Jsynchronous error - Prop deletion for an object hash " + hash + " that is not registered with the synchronized variable by name " + jsync.name;
+    }
+
+    var object = details.variable;
+
+    delete object[prop];
+
+    // TODO: Trigger .on() changes here. If we're going to link/unlink parent on the client side, here would be the place.
   }
   function newObject(hash, type, each, jsync) {
-    createSyncedVariable(hash, type, each, jsync); 
+    console.log('new obj', hash, type, each, jsync)
+    createSyncedVariable(hash, ACRONYMS[type], each, jsync); 
   }
-  function endObject(hash) {
+  function endObject(hash, jsync) {
+    console.log('end obj', hash)
+    var details = jsync.objects[hash];
+    if (details === undefined) {
+      throw "Jsynchronous error - End for an object hash " + hash + " that is not registered with the synchronized variable by name " + jsync.name;
+    }
+
     // Memento mori
+    delete jsync.objects[hash];
   }
 
   // ----------------------------------------------------------------
@@ -185,12 +220,21 @@ console.log('onmessage', data);
       return null;
     }
   }
+  function resolveSyncedVariable(hash, jsync) {
+    var details = jsync.objects[hash];
+    if (details === undefined) {
+      throw "Jsynchronous error - Referenced variable can't be found with hash " + r.hash;
+    }
+    return details.variable;
+  }
 
   function newCollection(type, sampleObj) {
     if (type === 'array') {
       return new Array(sampleObj.length);
     } else if (type === 'object') {
       return {};
+    } else {
+      throw "Jsynchronous error - cannot create a varible of an unrecognized type " + type;
     }
   }
 
