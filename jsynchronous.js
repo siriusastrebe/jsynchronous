@@ -205,7 +205,7 @@ class SyncedObject {
         }
 
         const operation = 'delete';
-        const change = new Change(syncedObject, operation, prop, flat(value), type);
+        const change = new Change(syncedObject, operation, prop, undefined, 'undefined', flat(value), type);
 
         delete obj[prop];
         return true  // Indicate Success
@@ -344,7 +344,7 @@ class JSynchronous {
     console.log('Payload length ', JSON.stringify(this.queuedCommunications).length);
 
     this.listeners.forEach((listener) => {
-      this.send(listener, JSON.stringify(this.queuedCommunications));
+      this.send(listener, JSON.stringify([this.name, this.queuedCommunications]));
     });
     this.queuedCommunications.length = 0;
   }

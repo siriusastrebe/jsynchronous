@@ -26,7 +26,8 @@ const gameState = jsynchronous({ball: {position: [10, 12, 2.4]}});
 gameState['ball']['velocity'] = [-0.4, 1.1, 0];
 gameState['ball']['acceleration'] = [0.01, 0, -0.01];
 gameState['ball']['acceleration'] = [99, 99, 99];
-gameState['random'] = {bool: true, boot: false, a: 'hello!', b: 0, c: null, d: undefined, e: 'undefined'}
+gameState['random'] = {bool: true, boot: false, a: 'hello!', b: 0, c: null, d: undefined, e: 'undefined', empty: new Array(8)}
+gameState['random'].empty.push('not actually empty!');
 console.log('Description', util.inspect(gameState['__jsynchronous__'].jsync.describe(), {showHidden: false, depth: null, colors: true}));
 
 
@@ -52,11 +53,12 @@ io.on('connection', (socket) => {
 //console.log(gameState.$listeners('rando'));
 
 gameState['extra'] = [];
+gameState['extra'].push(Math.random());
+gameState['extra'].push(Math.random());
+gameState['extra'].push(Math.random());
+gameState['extra'].push(Math.random());
 setInterval(() => {
-  gameState['extra'].push(Math.random());
-  if (Math.random() < 0.4) {
-    gameState['extra'].sort();
-  }
+  gameState['extra'].pop();
 }, 12000);
 
 //console.log('Changes', util.inspect(, {showHidden: false, depth: null, colors: true}));

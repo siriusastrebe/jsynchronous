@@ -19,6 +19,7 @@ console.log('onmessage', data);
     var json = JSON.parse(data);
 
     if (Array.isArray(json)) {
+      processUpdates(json);
     } else {
       newJsynchronousVariable(json);
     }
@@ -52,50 +53,118 @@ console.log('onmessage', data);
   function processInitialDescription(data, jsync) {
     for (var i=0; i<data.length; i++) {
       var d = data[i];
+      var hash = d.h;
       var type = ACRONYMS[d.t];
-      var variable = newCollection(type); 
-
-      var details = {
-        hash: d.h,
-        type: type,
-        variable: variable
-      }
-
-      jsync.objects[details.hash] = details;
-
-      enumerate(d.e, type, function (prop, value) {
-        if (Array.isArray(value)) {  // Via convention references to other objects/arrays are wrapped inside []
-          // We need to wait for all variables to be registered, esp in circular data structures
-          const reference = {
-            variable: variable,
-            prop: prop,
-            hash: value[0]
-          }
-          jsync.staging.references.push(reference);
-        } else {  // Primitives will be wrapped inside an object
-          if (value !== 'e') {  // Skip empty array elements
-            variable[prop] = resolvePrimitive(ACRONYMS[value.t], value.v);
-          }
-        }
-      });
+      var each = d.e;
+      var variable = createSyncedVariable(hash, type, each, jsync); 
 
       if (i === 0) {  // Convention is 0th element is root
         jsync.root = variable;
       }
     }
 
+    resolveReferences(jsync);
+
+    return jsync.root;
+  }
+
+  function createSyncedVariable(hash, type, each, jsync) {
+    // This function expects resolveReferences() to be called after all syncedVariables in the payload are processed
+    var variable = newCollection(type, each); 
+
+    var details = {
+      hash: hash,
+      type: type,
+      variable: variable
+    }
+
+    jsync.objects[hash] = details;
+
+    enumerate(each, type, function (prop, value) {
+      if (Array.isArray(value)) {  // Via convention references to other objects/arrays are wrapped inside []
+        // We need to wait for all variables to be registered, esp in circular data structures
+        var reference = {
+          variable: variable,
+          prop: prop,
+          hash: value[0]
+        }
+        jsync.staging.references.push(reference);
+      } else {  // Primitives will be wrapped inside an object
+        if (value !== 'e') {  // Skip empty array elements
+          variable[prop] = resolvePrimitive(ACRONYMS[value.t], value.v);
+        }
+      }
+    });
+
+    return variable;
+  }
+
+
+  function resolveReferences(jsync) {
     var references = jsync.staging.references;
     for (var j=0; j<references.length; j++) {
       var r = references[j];
       var details = jsync.objects[r.hash];
       if (details === undefined) {
-        throw "Jsynchronous sanity error - Referenced variable can't be found with hash " + r.hash;
+        throw "Jsynchronous error - Referenced variable can't be found with hash " + r.hash;
       }
-      var variable = details.variable
+      var variable = details.variable;
       r.variable[r.prop] = variable;
     }
+    jsync.staging.references.length = 0;
+  }
 
-    return jsync.root;
+  function processUpdates(data) {
+    var name = data[0];
+    var jsync = jsyncs[name];
+    if (jsync === undefined) {
+      throw "JSynchronous error - Server provided changes for a variable not registered with this client with the name " + name;
+    }
+
+    var changes = data[1];
+    for (let i=0; i<changes.length; i++) {
+      var change = changes[i];
+      var id = change[0];
+      var op = change[1];
+      var hash = change[2];
+
+      if (id !== jsync.counter) {// TODO: Handle missing ranges (broken TCP/IP connection)
+        throw "Jsynchronous error - Updates came out of order. Expected " + jsync.counter + " got " + id + ". This means your TCP/IP connection was reset in your transport";
+      }
+
+      if (op === 'set') {
+        var prop = change[3];
+        var newDetails =  change[4];
+        var oldDetails =  change[4];
+        set(hash, prop, newDetails, oldDetails, jsync);
+      } else if (op === 'del') {
+        var prop = change[3];        
+        var oldDetails =  change[5];
+        del(hash, prop, oldDetails, jsync);
+      } else if (op === 'new') {
+        var type = change[4];
+        var each = change[5];
+        newObject(hash, type, each, jsync);
+      } else if (op === 'end') {
+        endObject(hash, jsync);
+      } else {
+        throw "Jsynchronous error - Unidentified operation coming from server.";
+      }
+    }
+
+    resolveReferences(jsync);
+  }
+  
+  function set(hash, prop, newDetails, oldDetails, jsync) {
+    jsync.objects
+  }
+  function del(hash, prop, jsync) {
+  }
+  function newObject(hash, type, each, jsync) {
+    createSyncedVariable(hash, type, each, jsync); 
+  }
+  function endObject(hash) {
+    // Memento mori
   }
 
   // ----------------------------------------------------------------
@@ -117,9 +186,9 @@ console.log('onmessage', data);
     }
   }
 
-  function newCollection(type) {
+  function newCollection(type, sampleObj) {
     if (type === 'array') {
-      return [];
+      return new Array(sampleObj.length);
     } else if (type === 'object') {
       return {};
     }
