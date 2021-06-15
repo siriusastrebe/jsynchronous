@@ -8,7 +8,8 @@ var jsynchronous = function () {
     'undefined',
     'null',
     'empty',
-    'bigint'
+    'bigint',
+    'function'
   ]
 
   var OP_ENCODINGS = [
@@ -227,6 +228,8 @@ var jsynchronous = function () {
       return undefined;
     } else if (type === 'null') {
       return null;
+    } else if (type === 'function') {
+      return undefined;  // Functions are, for now, read-only
     }
   }
   function resolveSyncedVariable(hash, jsync) {
@@ -237,14 +240,15 @@ var jsynchronous = function () {
     return details.variable;
   }
   function isPrimitive(type) {
-    if (type === 'number'     || 
-        type === 'number'     || 
-        type === 'string'    || 
-        type === 'boolean'   || 
-        type === 'undefined' || 
-        type === 'null'      || 
-        type === 'empty'     || 
-        type === 'bigint') {
+    if (type === 'number'    ||
+        type === 'number'    ||
+        type === 'string'    ||
+        type === 'boolean'   ||
+        type === 'undefined' ||
+        type === 'null'      ||
+        type === 'empty'     ||
+        type === 'bigint'    ||
+        type === 'function') {  // Functions are, for now, read-only
       return true
     } else {
       return false

@@ -71,9 +71,11 @@ function everything() {
     bool1: true,
     bool2: false,
     undef: undefined,
+    func: (() => 'yar har'),
     null: null,
     obj1: { a: [0, 1, 2, 3, 4, 5], empties: [undefined, null] },
     obj2: { a: 'b', c: 'd' },
+    func: (() => 'what is this?'),
     arr: [0, -1, -2, -3, -4, -5, -6, -7, -8, -9, 'Liftoff', { houston: 'we got a problem' }],
     circular: [[]]
   }
@@ -87,10 +89,16 @@ function everything() {
 
 const gameState = jsynchronous(everything());
 
+console.log(gameState.func());
+setTimeout(() => {
+  console.log(gameState.func2());
+}, 6000);
+
 setTimeout(() => {
   gameState.circular2 = [[[]]]
   gameState.circular2[0][0][0] = gameState.circular2;
 
+  gameState.func2 = (() => 'yo ho!');
   gameState.arr.push('This is ground control to major tom');
 
   gameState.obj2 = {z: 'y', x: 'w'}

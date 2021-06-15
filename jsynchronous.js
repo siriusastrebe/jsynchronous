@@ -9,7 +9,8 @@ const TYPE_ENCODINGS = {
   'undefined': 5,
   'null': 6,
   'empty': 7,
-  'bigint': 8
+  'bigint': 8,
+  'function': 9
 }
 
 const OP_ENCODINGS = {
@@ -55,6 +56,7 @@ class Change {
       //encode(this.oldValue, this.oldType),
       // TODO: Rewind mode and client-history cares about the old type
     ]
+
 
     return change;
   }
@@ -508,7 +510,8 @@ function isPrimitive(detailed) {
       detailed === 'number'    ||
       detailed === 'bigint'    ||
       detailed === 'null'      ||  // Although null is in ECMA an object, we'll consider it a primitive for simplicity
-      detailed === 'undefined') {
+      detailed === 'undefined' || 
+      detailed === 'function') {   // For now, functions are just values as far as jsynchronous is concerned
     return true;
   } else {
     return false;
@@ -679,12 +682,13 @@ function encodePrimitive(value, type) {
   if (type === 'number')    return value;
   if (type === 'boolean')   return !!value ? 1 : 0;
   if (type === 'bigint')    return String(value);
+  if (type === 'function')  return undefined;
   throw `Jsynchronous sanity error - Primitive is unserializable ${type}, ${value}`;
 }
 function encodeEnumerable(value) {
   const syncedObject = value[jsynchronous.reserved_property];
   if (syncedObject === undefined) {
-    throw `Jsynchronous sanity error - synced object is referencing a non-synced variable ${value}`;
+    throw `Jsynchronous sanity error - encoding object is referencing a non-synced variable ${value}`;
   }
   return syncedObject.hash;
 }
