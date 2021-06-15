@@ -6,7 +6,7 @@
   const jsync = jsynchronous();
 
   socket.on('msg', function (a, b, c) {
-    console.log(a, b, c);
+    // console.log(a);
     jsync.onmessage(a);
 
     console.log(jsync.get());

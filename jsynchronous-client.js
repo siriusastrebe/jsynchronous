@@ -138,6 +138,8 @@ var jsynchronous = function () {
 
     if (minCounter !== jsync.counter) {
       throw "Jsynchronous error - Updates skipped. Expected " + jsync.counter + " got " + minCounter + ". This means your TCP/IP connection was reset in your transport";
+    } else {
+      jsync.counter = maxCounter+1;
     }
 
     for (let i=0; i<changes.length; i++) {

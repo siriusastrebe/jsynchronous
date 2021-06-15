@@ -27,8 +27,8 @@ const syncedNames = {};
 
 class Change {
   constructor(syncedObject, operation, prop, value, type, oldValue, oldType) {
-    // A change exists in the space of two snapshots in time for objects that may not exist earlier or later.
-    // It's important for garbage collection that a change does not directly reference any objects or arrays, only hashes.
+    // A change exists in the space of two snapshots in time for objects that may not exist earlier or presently.
+    // It's important for garbage collection that a change does not directly reference any synced variables, only hashes.
     const jsync = syncedObject.jsync
 
     this.id = jsync.counter++;
@@ -38,8 +38,8 @@ class Change {
     this.prop = prop;
     this.oldValue = oldValue;
     this.value = value;
-    this.type = type;
-    this.oldType = oldType;
+    this.type = flat(type);
+    this.oldType = flat(oldType);
 
     if (Array.isArray(syncedObject.proxy) && !isNaN(prop) && Number.isInteger(Number(prop))) {
       this.prop = Number(prop);  // Coerce prop to a number if it belongs to an array
@@ -56,7 +56,6 @@ class Change {
       //encode(this.oldValue, this.oldType),
       // TODO: Rewind mode and client-history cares about the old type
     ]
-
 
     return change;
   }
@@ -199,7 +198,7 @@ class SyncedObject {
 
         // TODO: Detect array operations: splice, shift, unshift, length
         const operation = 'set';
-        new Change(syncedObject, operation, prop, flat(obj[prop]), type, flat(oldValue), oldType);
+        new Change(syncedObject, operation, prop, obj[prop], type, oldValue, oldType);
 
         if (!isPrimitive(oldType)) {
           let syncedOld = oldValue[jsynchronous.reserved_property];
@@ -227,7 +226,7 @@ class SyncedObject {
         }
 
         const operation = 'delete';
-        const change = new Change(syncedObject, operation, prop, undefined, 'undefined', flat(value), type);
+        const change = new Change(syncedObject, operation, prop, undefined, 'undefined', value, type);
 
         delete obj[prop];
         return true  // Indicate Success
@@ -309,7 +308,7 @@ class JSynchronous {
 
     // These variables are special method names on the root of a jsynchronized variable. They will throw an error if you reassign these methods, so you can rename these methods by passing them into the options.
     this.jsyncReservedWord = options.jsync || '$sync';
-    this.resyncReservedWord = options.resync || '$resync';
+    this.onmessageReservedWord = options.onmessage || '$onmessage';
     this.unsyncReservedWord = options.unsync || '$unsync';
     this.startsyncReservedWord = options.startsync || '$startsync';
     this.listenersReservedWord = options.listeners || '$listeners';
@@ -317,7 +316,7 @@ class JSynchronous {
     // Cerce this. to refer to this jsynchronous instance
     this.reserved = {}
     this.reserved[this.jsyncReservedWord]     = ((a) => this.j_sync(a));
-    this.reserved[this.resyncReservedWord]    = ((a) => this.re_sync(a));
+    this.reserved[this.onmessageReservedWord] = ((a) => this.on_message(a));
     this.reserved[this.unsyncReservedWord]    = ((a) => this.un_sync(a));
     this.reserved[this.startsyncReservedWord] = ((a) => this.start_sync(a));
     this.reserved[this.listenersReservedWord] = (() => this.listeners);
@@ -427,7 +426,7 @@ class JSynchronous {
       throw 'jsynchronous Error in .unsync(websocket), no websocket registered that matches ' + websocket;
     }
   }
-  re_sync() {
+  on_message() {
   }
   describe() {
     if (this.cachedDescription && this.cachedDescription.c === this.counter) {
@@ -628,7 +627,7 @@ function isRoot(syncedObject) {
   return (syncedObject.jsync.root === syncedObject.proxy);
 }
 function flat(value) {
-  // Expects value to be either be a primitive or a syncedObject Proxy. Returns either the value if it's a primitive, or the variable's hash. 
+  // Turns variable into its hash, or returns a primitive's value. Expects a syncedObject Proxy if it's an object
   const type = detailedType(value);
   const primitive = isPrimitive(type);
 
