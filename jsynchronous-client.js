@@ -1,33 +1,44 @@
 var jsynchronous = function () {
-  var TYPE_ENCODINGS = {
-    'array': 0,
-    'object': 1,
-    'number': 2,
-    'string': 3,
-    'boolean': 4,
-    'undefined': 5,
-    'null': 6,
-    'empty': 7,
-    'bigint': 8
-  }
-  var OP_ENCODINGS = {
-    0: 'set',
-    1: 'del',
-    2: 'new',
-    3: 'end',
-  }
+  var TYPE_ENCODINGS = [
+    'array',
+    'object',
+    'number',
+    'string',
+    'boolean',
+    'undefined',
+    'null',
+    'empty',
+    'bigint'
+  ]
 
+  var OP_ENCODINGS = [
+    'initial',
+    'changes',
+    'set',
+    'delete',
+    'new',
+    'end'
+  ]
 
   var jsyncs = {}
   var recentJsync;
 
   function onmessage(data) {
     var json = JSON.parse(data);
+    var op = OP_ENCODINGS[json[0]]; 
 
-    if (Array.isArray(json)) {
-      processUpdates(json);
-    } else {
-      newJsynchronousVariable(json);
+    if (op === 'initial') {
+      var name = json[1];
+      var counter = json[2];
+      var variables = json[3];
+
+      newJsynchronousVariable(name, counter, variables);
+    } else if (op === 'changes') {
+      var name = json[1];
+      var minCounter = json[2];
+      var maxCounter = json[3];
+      var changes = json[4];
+      processChanges(name, minCounter, maxCounter, changes);
     }
   }
 
@@ -39,10 +50,10 @@ var jsynchronous = function () {
     }
   }
 
-  function newJsynchronousVariable(data) {
+  function newJsynchronousVariable(name, counter, variables) {
     var jsync = {
-      name: data.name,
-      counter: data.c,  // Counter will always be 1 above the last packet
+      name: name,
+      counter: counter,  // Counter will always be 1 above the last packet
       objects: {},  // key-> value corresponds to details.hash->details
       root: undefined,
       staging: {
@@ -50,18 +61,18 @@ var jsynchronous = function () {
       }
     }
 
-    jsyncs[data.name] = jsync;
+    jsyncs[name] = jsync;
     recentJsync = jsync;
 
-    processInitialDescription(data.e, jsync);
+    processInitialDescription(variables, jsync);
   }
 
   function processInitialDescription(data, jsync) {
     for (var i=0; i<data.length; i++) {
       var d = data[i];
-      var hash = d.h;
-      var type = TYPE_ENCODINGS[d.t];
-      var each = d.e;
+      var hash = d[0];
+      var type = TYPE_ENCODINGS[d[1]];
+      var each = d[2];
       var variable = createSyncedVariable(hash, type, each, jsync); 
 
       if (i === 0) {  // Convention is 0th element is root
@@ -86,19 +97,21 @@ var jsynchronous = function () {
 
     jsync.objects[hash] = details;
 
-    enumerate(each, type, function (prop, value) {
-      if (Array.isArray(value)) {  // Via convention references to other objects/arrays are wrapped inside []
-        // We need to wait for all variables to be registered, esp in circular data structures
+    enumerate(each, type, function (prop, encoded) {
+      var t = TYPE_ENCODINGS[encoded[0]]
+      var v = encoded[1];
+
+      if (isPrimitive(t)) {
+        if (t !== 'empty') {
+          variable[prop] = resolvePrimitive(t, v);
+        }
+      } else {  
         var reference = {
           variable: variable,
           prop: prop,
-          hash: value[0]
+          hash: v
         }
-        jsync.staging.references.push(reference);
-      } else {  // Primitives will be wrapped inside an object
-        if (value !== 'e') {  // Skip empty array elements
-          variable[prop] = resolvePrimitive(TYPE_ENCODINGS[value.t], value.v);
-        }
+        jsync.staging.references.push(reference);  // We need to wait for all variables to be registered, esp in circular data structures
       }
     });
 
@@ -115,38 +128,34 @@ var jsynchronous = function () {
     }
     jsync.staging.references.length = 0;
   }
-  function processUpdates(data) {
-    var name = data[0];
+
+  function processChanges(name, minCounter, maxCounter, changes) {
     var jsync = jsyncs[name];
     if (jsync === undefined) {
       throw "JSynchronous error - Server provided changes for a variable not registered with this client with the name " + name;
     }
 
-    var changes = data[1];
+    if (minCounter !== jsync.counter) {
+      throw "Jsynchronous error - Updates skipped. Expected " + jsync.counter + " got " + minCounter + ". This means your TCP/IP connection was reset in your transport";
+    }
+
     for (let i=0; i<changes.length; i++) {
       var change = changes[i];
-      var id = change[0];
-      var op = OP_ENCODINGS[change[1]];
-      var hash = change[2];
-
-      if (id !== jsync.counter) {  // TODO: Handle missing ranges (broken TCP/IP connection)
-        throw "Jsynchronous error - Updates came out of order. Expected " + jsync.counter + " got " + id + ". This means your TCP/IP connection was reset in your transport";
-      } else {
-        jsync.counter++;
-      }
+      var op = OP_ENCODINGS[change[0]];
+      var hash = change[1];
 
       if (op === 'set') {
-        var prop = change[3];
-        var newDetails =  change[4];
-        var oldDetails =  change[4];
+        var prop = change[2];
+        var newDetails = change[3];
+        var oldDetails = change[4];
         set(hash, prop, newDetails, oldDetails, jsync);
       } else if (op === 'del') {
-        var prop = change[3];        
-        var oldDetails =  change[5];
+        var prop = change[2];        
+        var oldDetails =  change[4];
         del(hash, prop, oldDetails, jsync);
       } else if (op === 'new') {
-        var type = change[3];
-        var each = change[4];
+        var type = change[2];
+        var each = change[3];
         newObject(hash, type, each, jsync);
       } else if (op === 'end') {
         endObject(hash, jsync);
@@ -165,16 +174,14 @@ var jsynchronous = function () {
     }
 
     var object = details.variable;
-    var type = TYPE_ENCODINGS[newDetails.t];
-
+    var type = TYPE_ENCODINGS[newDetails[0]];
     var value;
 
-    if (Array.isArray(newDetails)) {  // Via convention if a description is wrapped in an array, it's a reference to another object
-      value = resolveSyncedVariable(newDetails[0], jsync);
+    if (isPrimitive(type)) {
+      value = resolvePrimitive(type, newDetails[1]);
     } else {
-      value = resolvePrimitive(type, newDetails.v);
+      value = resolveSyncedVariable(newDetails[1], jsync);
     }
-
 
     object[prop] = value;
     // TODO: Trigger .on() changes here
@@ -211,23 +218,37 @@ var jsynchronous = function () {
     if (type === 'boolean') {
       return Boolean(value);
     } else if (type === 'bigint') {
-      return new BigInt(value);
+      return BigInt(value);
     } else if (type === 'number') {
       return value;
     } else if (type === 'string') {
       return value;
     } else if (type === 'undefined') {
       return undefined;
-    } else if (type === null) {
+    } else if (type === 'null') {
       return null;
     }
   }
   function resolveSyncedVariable(hash, jsync) {
     var details = jsync.objects[hash];
     if (details === undefined) {
-      throw "Jsynchronous error - Referenced variable can't be found with hash " + r.hash;
+      throw "Jsynchronous error - Referenced variable can't be found with hash " + hash;
     }
     return details.variable;
+  }
+  function isPrimitive(type) {
+    if (type === 'number'     || 
+        type === 'number'     || 
+        type === 'string'    || 
+        type === 'boolean'   || 
+        type === 'undefined' || 
+        type === 'null'      || 
+        type === 'empty'     || 
+        type === 'bigint') {
+      return true
+    } else {
+      return false
+    }
   }
 
   function newCollection(type, sampleObj) {

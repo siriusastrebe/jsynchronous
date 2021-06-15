@@ -32,32 +32,74 @@ jsynchronous.send = (websocket, data) => {
 //console.log('Description', util.inspect(gameState['__jsynchronous__'].jsync.describe(), {showHidden: false, depth: null, colors: true}));
 
 
-const huge = []
-for (let i=0; i<10000; i++) {
-  huge.push(i);
-}
-const gameState = jsynchronous(huge);
+//const huge = []
+//for (let i=0; i<10000; i++) {
+//  huge.push(i);
+//}
+//const gameState = jsynchronous(huge);
 
 //const huge = []
 //for (let i=0; i<4; i++) {
 //  huge.push(i);
 //}
 //const gameState = jsynchronous(huge);
-//
-//
-//// console.log('reference', gameState['__jsynchronous__'].reference.length)
-//
+
+
+// console.log('reference', gameState['__jsynchronous__'].reference.length)
+
+///setInterval(() => {
+///  for (let i=0; i<4; i++) {
+///    gameState.push(i);
+///  }
+///}, 12000)
+
 //setTimeout(() => {
-//  for (let i=0; i<4; i++) {
+//  for (let i=0; i<10000; i++) {
 //    gameState.push(i);
 //  }
 //}, 12000)
 
-setTimeout(() => {
-  for (let i=0; i<10000; i++) {
-    gameState.push(i);
+
+function everything() {
+  const a = {
+    string: '$†®îñG',
+    num: 123467890,
+    num2: -2.02,
+    num3: 1.234567890123456789,
+    bigint: BigInt('12345678901234567890123456789012345678901234567890'),
+    bigint2: BigInt('-12345678901234567890123456789012345678901234567890'),
+    bool1: true,
+    bool2: false,
+    undef: undefined,
+    null: null,
+    obj1: { a: [0, 1, 2, 3, 4, 5], empties: [undefined, null] },
+    obj2: { a: 'b', c: 'd' },
+    arr: [0, -1, -2, -3, -4, -5, -6, -7, -8, -9, 'Liftoff', { houston: 'we got a problem' }],
+    circular: []
   }
-}, 12000)
+
+//  a.circular[0] = a.circular;
+//  a.obj1.empties.length = 3;
+  return a;
+}
+a = [undefined, null];
+a.length = 3;
+
+const gameState = jsynchronous(a);
+
+setInterval(() => {
+//  gameState.circular2 = [[[]]]
+//  gameState.circular2[0][0][0] = gameState.circular2;
+//
+//  gameState.arr.push('This is ground control to major tom');
+//
+//  gameState.obj2 = {z: 'y', x: 'w'}
+//  gameState.bigint = gameState.bigint * BigInt(2);
+//  gameState.bigint2 = gameState.bigint2 * BigInt(2);
+//  gameState.num = gameState.num - 1;
+}, 12000);
+
+
 
 
 
