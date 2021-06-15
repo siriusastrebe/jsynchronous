@@ -75,29 +75,31 @@ function everything() {
     obj1: { a: [0, 1, 2, 3, 4, 5], empties: [undefined, null] },
     obj2: { a: 'b', c: 'd' },
     arr: [0, -1, -2, -3, -4, -5, -6, -7, -8, -9, 'Liftoff', { houston: 'we got a problem' }],
-    circular: []
+    circular: [[]]
   }
 
-//  a.circular[0] = a.circular;
-//  a.obj1.empties.length = 3;
+  a.circular[0][0] = a.circular;
+  a.obj1.empties.length = 3;
   return a;
 }
-a = [undefined, null];
-a.length = 3;
+//a = [undefined, null];
+//a.length = 3;
 
-const gameState = jsynchronous(a);
+const gameState = jsynchronous(everything());
 
-setInterval(() => {
-//  gameState.circular2 = [[[]]]
-//  gameState.circular2[0][0][0] = gameState.circular2;
-//
-//  gameState.arr.push('This is ground control to major tom');
-//
-//  gameState.obj2 = {z: 'y', x: 'w'}
-//  gameState.bigint = gameState.bigint * BigInt(2);
-//  gameState.bigint2 = gameState.bigint2 * BigInt(2);
-//  gameState.num = gameState.num - 1;
-}, 12000);
+setTimeout(() => {
+  gameState.circular2 = [[[]]]
+  gameState.circular2[0][0][0] = gameState.circular2;
+
+  gameState.arr.push('This is ground control to major tom');
+
+  gameState.obj2 = {z: 'y', x: 'w'}
+  gameState.bigint = gameState.bigint * BigInt(2);
+  gameState.bigint2 = gameState.bigint2 * BigInt(2);
+  gameState.bigint3 = BigInt(1);
+  gameState.num = gameState.num - 1;
+  gameState.obj1.empties.length = gameState.obj1.empties.length + 1;
+}, 5000);
 
 
 

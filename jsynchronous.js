@@ -72,9 +72,9 @@ class Creation {
   encode() {
     const creation = [
       OP_ENCODINGS[this.operation],
-      this.description.h,
-      this.description.t,
-      this.description.e
+      this.description[0],
+      this.description[1],
+      this.description[2]
     ]
     return creation;
   }
@@ -95,7 +95,6 @@ class Deletion {
   encode() {
     const deletion = [
       OP_ENCODINGS[this.operation],
-      this.id,
       this.hash
     ]
     return deletion;
@@ -115,8 +114,8 @@ class SyncedObject {
 
     if (visited === undefined) {
       visited = new Map();
-      visited.set(original, this);
     }
+    visited.set(original, this);
 
     enumerate(original, (value, prop) => {
       const type = detailedType(value);
@@ -176,14 +175,16 @@ class SyncedObject {
           }
         }
 
-        if (isPrimitive(type)) {
+        let syncedValue;
+
+        if (isPrimitive(type) || type === 'function') {
           obj[prop] = value;
         } else {
           if (referencesAnotherJsynchronousVariable(value, syncedObject.jsync)) {
             throw `Cannot reference a jsynchronous variable that's already being tracked by another synchronized variable.`;
           }
 
-          let syncedValue = value[jsynchronous.reserved_property];
+          syncedValue = value[jsynchronous.reserved_property];
           if (syncedValue === undefined) {
             syncedValue = new SyncedObject(syncedObject.jsync, value);
             obj[prop] = syncedValue.proxy;
@@ -192,7 +193,6 @@ class SyncedObject {
             obj[prop] = syncedValue.proxy;
             syncedValue.linkParent(syncedObject, prop);
           }
-
         }
 
         // TODO: Detect array operations: splice, shift, unshift, length
@@ -520,6 +520,8 @@ function detailedType(value) {
     return type;  // 'boolean' 'string' 'undefined' 'number' 'bigint' 'symbol'
   } else if (value === null) {
     return 'null';  // Special case made for typeof null === 'object'
+  } else if (type === 'function') {
+    return 'function';
   } else if (value.constructor && value.constructor() === 'object') {
     return 'object';  // Easy catch-all for object type
   } else if (value instanceof Date) {
@@ -629,6 +631,8 @@ function flat(value) {
 
   if (primitive) {
     return value;
+  } else if (type === 'function') {
+    return undefined;
   } else {
     const syncedObject = value[jsynchronous.reserved_property];
     if (syncedObject === undefined) {
@@ -660,6 +664,8 @@ function encode(value, type) {
     if (p !== '') {
       encoded.push(p);
     }
+  } else if (typeof value === 'string' && value.length === 8) {
+    encoded.push(value);  // It's already a 8 string hash
   } else {
     encoded.push(encodeEnumerable(value));
   }
@@ -678,7 +684,7 @@ function encodePrimitive(value, type) {
 function encodeEnumerable(value) {
   const syncedObject = value[jsynchronous.reserved_property];
   if (syncedObject === undefined) {
-    throw `Jsynchronous sanity error - synced object is referencing a non-synced variable.`;
+    throw `Jsynchronous sanity error - synced object is referencing a non-synced variable ${value}`;
   }
   return syncedObject.hash;
 }
