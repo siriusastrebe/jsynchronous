@@ -15,7 +15,7 @@ const port = 3000;
 // Jsynchronous
 jsynchronous.send = (websocket, data) => {
   websocket.emit('msg', data);
-  console.log('☐', data);
+  console.log('☐', data.length);
 }
 
 //a = []
@@ -32,39 +32,68 @@ jsynchronous.send = (websocket, data) => {
 //console.log('Description', util.inspect(gameState['__jsynchronous__'].jsync.describe(), {showHidden: false, depth: null, colors: true}));
 
 
-const gameState = jsynchronous({ball: {position: [10, 12, 2.4]}});
-gameState['ball']['velocity'] = [-0.4, 1.1, 0];
-gameState['ball']['acceleration'] = [0.01, 0, -0.01];
-gameState['ball']['acceleration'] = [99, 99, 99];
-gameState['random'] = {bool: true, boot: false, a: 'hello!', b: 0, c: null, d: undefined, e: 'undefined', empty: new Array(8)}
-gameState['random'].empty.push('not actually empty!');
-console.log('Description', util.inspect(gameState['__jsynchronous__'].jsync.describe(), {showHidden: false, depth: null, colors: true}));
+const huge = []
+for (let i=0; i<10000; i++) {
+  huge.push(i);
+}
+const gameState = jsynchronous(huge);
 
-gameState['extra'] = [];
+//const huge = []
+//for (let i=0; i<4; i++) {
+//  huge.push(i);
+//}
+//const gameState = jsynchronous(huge);
+//
+//
+//// console.log('reference', gameState['__jsynchronous__'].reference.length)
+//
+//setTimeout(() => {
+//  for (let i=0; i<4; i++) {
+//    gameState.push(i);
+//  }
+//}, 12000)
+
+setTimeout(() => {
+  for (let i=0; i<10000; i++) {
+    gameState.push(i);
+  }
+}, 12000)
+
+
+
+//const gameState = jsynchronous({ball: {position: [10, 12, 2.4]}});
+//gameState['ball']['velocity'] = [-0.4, 1.1, 0];
+//gameState['ball']['acceleration'] = [0.01, 0, -0.01];
+//gameState['ball']['acceleration'] = [99, 99, 99];
+//gameState['random'] = {bool: true, boot: false, a: 'hello!', b: 0, c: null, d: undefined, e: 'undefined', empty: new Array(8)}
+//gameState['random'].empty.push('not actually empty!');
+//console.log('Description', util.inspect(gameState['__jsynchronous__'].jsync.describe(), {showHidden: false, depth: null, colors: true}));
+//
+//gameState['extra'] = [];
 //setInterval(() => {
 //  console.log('a little xtra');
 //  gameState['extra'].push(Math.random());
 //}, 15000);
 
-setTimeout(() => {
-  gameState['extra'].push({a: 'b'});
-  gameState['extra'].push(['c']);
-  gameState['extra'].push('str');
-  gameState['extra'].push(3);
-  gameState['extra'].push(undefined);
-  gameState['extra'].push(null);
-}, 10000);
-
-
-setTimeout(() => {
-  a = []
-  b = []
-  c = []
-  a.push(b);
-  b.push(c);
-  c.push(a);
-  gameState['circular'] = a;
-}, 15000);
+//setTimeout(() => {
+//  gameState['extra'].push({a: 'b'});
+//  gameState['extra'].push(['c']);
+//  gameState['extra'].push('str');
+//  gameState['extra'].push(3);
+//  gameState['extra'].push(undefined);
+//  gameState['extra'].push(null);
+//}, 10000);
+//
+//
+//setTimeout(() => {
+//  a = []
+//  b = []
+//  c = []
+//  a.push(b);
+//  b.push(c);
+//  c.push(a);
+//  gameState['circular'] = a;
+//}, 15000);
 
 
 

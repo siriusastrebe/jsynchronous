@@ -1,21 +1,27 @@
 var jsynchronous = function () {
-  var ACRONYMS = {
-    'a': 'array',
-    'b': 'boolean',
-    'bi': 'bigint',
-    'e': 'empty',
-    'o': 'object',
-    'n': 'number',
-    's': 'string',
-    'u': 'undefined',
-    'null': null
+  var TYPE_ENCODINGS = {
+    'array': 0,
+    'object': 1,
+    'number': 2,
+    'string': 3,
+    'boolean': 4,
+    'undefined': 5,
+    'null': 6,
+    'empty': 7,
+    'bigint': 8
   }
+  var OP_ENCODINGS = {
+    0: 'set',
+    1: 'del',
+    2: 'new',
+    3: 'end',
+  }
+
 
   var jsyncs = {}
   var recentJsync;
 
   function onmessage(data) {
-console.log('onmessage', data);
     var json = JSON.parse(data);
 
     if (Array.isArray(json)) {
@@ -54,7 +60,7 @@ console.log('onmessage', data);
     for (var i=0; i<data.length; i++) {
       var d = data[i];
       var hash = d.h;
-      var type = ACRONYMS[d.t];
+      var type = TYPE_ENCODINGS[d.t];
       var each = d.e;
       var variable = createSyncedVariable(hash, type, each, jsync); 
 
@@ -91,7 +97,7 @@ console.log('onmessage', data);
         jsync.staging.references.push(reference);
       } else {  // Primitives will be wrapped inside an object
         if (value !== 'e') {  // Skip empty array elements
-          variable[prop] = resolvePrimitive(ACRONYMS[value.t], value.v);
+          variable[prop] = resolvePrimitive(TYPE_ENCODINGS[value.t], value.v);
         }
       }
     });
@@ -120,7 +126,7 @@ console.log('onmessage', data);
     for (let i=0; i<changes.length; i++) {
       var change = changes[i];
       var id = change[0];
-      var op = change[1];
+      var op = OP_ENCODINGS[change[1]];
       var hash = change[2];
 
       if (id !== jsync.counter) {  // TODO: Handle missing ranges (broken TCP/IP connection)
@@ -153,14 +159,13 @@ console.log('onmessage', data);
   }
 
   function set(hash, prop, newDetails, oldDetails, jsync) {
-    console.log('setting', hash, prop, newDetails, oldDetails)
     var details = jsync.objects[hash];
     if (details === undefined) {
       throw "Jsynchronous error - Set for an object hash " + hash + " that is not registered with the synchronized variable by name " + jsync.name;
     }
 
     var object = details.variable;
-    var type = ACRONYMS[newDetails.t];
+    var type = TYPE_ENCODINGS[newDetails.t];
 
     var value;
 
@@ -175,7 +180,6 @@ console.log('onmessage', data);
     // TODO: Trigger .on() changes here
   }
   function del(hash, prop, jsync) {
-    console.log('deleting', hash, prop)
     var details = jsync.objects[hash];
     if (details === undefined) {
       throw "Jsynchronous error - Prop deletion for an object hash " + hash + " that is not registered with the synchronized variable by name " + jsync.name;
@@ -188,11 +192,9 @@ console.log('onmessage', data);
     // TODO: Trigger .on() changes here. If we're going to link/unlink parent on the client side, here would be the place.
   }
   function newObject(hash, type, each, jsync) {
-    console.log('new obj', hash, type, each, jsync)
-    createSyncedVariable(hash, ACRONYMS[type], each, jsync); 
+    createSyncedVariable(hash, TYPE_ENCODINGS[type], each, jsync); 
   }
   function endObject(hash, jsync) {
-    console.log('end obj', hash)
     var details = jsync.objects[hash];
     if (details === undefined) {
       throw "Jsynchronous error - End for an object hash " + hash + " that is not registered with the synchronized variable by name " + jsync.name;

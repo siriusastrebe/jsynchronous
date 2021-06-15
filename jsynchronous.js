@@ -1,15 +1,24 @@
 'use strict';
 
-const ACRONYMS = {
-  'array': 'a',
-  'boolean': 'b',
-  'bigint': 'bi',
-  'empty': 'e',
-  'object': 'o',
-  'number': 'n',
-  'string': 's',
-  'undefined': 'u',
-  'null': null  // null is a valid JSON identifier
+const TYPE_ENCODINGS = {
+  'array': 0,
+  'object': 1,
+  'number': 2,
+  'string': 3,
+  'boolean': 4,
+  'undefined': 5,
+  'null': 6,
+  'empty': 7,
+  'bigint': 8
+}
+
+const OP_ENCODINGS = {
+  'initial': 0,
+  'changes': 1,
+  'set': 2,
+  'delete': 3,
+  'new': 4,
+  'end': 5
 }
 
 const syncedNames = {};
@@ -39,12 +48,12 @@ class Change {
   }
   serialize() {
     const change = [
-      this.id,
-      this.operation.substring(0, 3),
+      OP_ENCODINGS[this.operation],
       this.hash,
       this.prop,
-      isPrimitive(this.type) ? serializePrimitive(this.value, this.type) : [this.value],
-      isPrimitive(this.oldType) ? serializePrimitive(this.oldValue, this.oldType) : [this.oldValue]
+      serialize(this.value, this.type),
+      // isPrimitive(this.oldType) ? serializePrimitive(this.oldValue, this.oldType) : [this.oldValue]
+      // TODO: Rewind mode and client-history cares about the old type
     ]
 
     return change;
@@ -62,8 +71,7 @@ class Creation {
   }
   serialize() {
     const creation = [
-      this.id,
-      'new',
+      OP_ENCODINGS[this.operation],
       this.description.h,
       this.description.t,
       this.description.e
@@ -86,8 +94,8 @@ class Deletion {
   }
   serialize() {
     const deletion = [
+      OP_ENCODINGS[this.operation],
       this.id,
-      'end',
       this.hash
     ]
     return deletion;
@@ -157,6 +165,10 @@ class SyncedObject {
         const oldValue = obj[prop];
         const oldType = detailedType(oldValue);
         const type = detailedType(value);
+
+        if (prop === 'length' && syncedObject.type === 'array' && obj.length === value) {
+          return true  // Array lengths trigger every time the array is modified. We can ignore them
+        }
 
         if (isRoot(syncedObject)) {
           if (syncedObject.jsync.reserved[prop]) {
@@ -254,18 +266,19 @@ class SyncedObject {
     }
   }
   describe() {
-    const state = {
-      h: this.hash,
-      t: ACRONYMS[this.type],
-      e: newCollection(this.type, this.proxy)
-    }
+    const state = [
+      this.hash,
+      TYPE_ENCODINGS[this.type],
+      newCollection(this.type, this.proxy)
+    ]
 
     enumerate(this.proxy, (value, prop) => {
-      state.e[prop] = serialize(value);
+      const type = detailedType(value);
+      state[2][prop] = serialize(value, type);
     });
 
     if (this.type === 'array') {
-      labelEmpty(this.proxy, state.e);  // We need to specify which array elements are empty, and which are undefined. They both end up as 'null' in JSON.stringify();
+      labelEmpty(this.proxy, state[2]);  // We need to specify which array elements are empty, and which are undefined. They both end up as 'null' in JSON.stringify();
     }
 
     return state;
@@ -341,7 +354,7 @@ class JSynchronous {
   communicate(change) {
     if (this.wait === false) {
       this.history.push(change);
-      this.queuedCommunications.push(change.serialize());
+      this.queuedCommunications.push(change);
 
       if (this.bufferTimeout === undefined) {
         this.bufferTimeout = setTimeout(() => this.sendPackets(), this.buffer_time);
@@ -351,10 +364,30 @@ class JSynchronous {
   sendPackets() {
     this.bufferTimeout = undefined;
 
-    console.log('Payload length ', JSON.stringify(this.queuedCommunications).length);
+    let min;
+    let counter;
+    let max;
+
+    const changes = this.queuedCommunications.map((c) => {
+      if (counter === undefined) {
+        counter = c.id;
+        min = c.id;
+      } else if (counter+1 !== c.id) {
+        throw `Jsynchronous sanity error - Attempting to send changes but they're not ascending order`;
+      } else {
+        counter = c.id;
+        max = c.id;
+      }
+
+      return c.serialize();
+    });
+
+    if (changes.length-1 !== max - min) {
+      throw `Jsynchronous sanity error - Attempting to send changes but size of changes doesn't match the final tally`;
+    }
 
     this.listeners.forEach((listener) => {
-      this.send(listener, JSON.stringify([this.name, this.queuedCommunications]));
+      this.send(listener, JSON.stringify([OP_ENCODINGS['changes'], this.name, min, max, changes]));
     });
     this.queuedCommunications.length = 0;
   }
@@ -399,14 +432,15 @@ class JSynchronous {
       return this.cachedDescription
     }
 
-    const fullState = {
-      name: this.name,
-      c: this.counter
-    }
+    const fullState = [
+      OP_ENCODINGS['initial'],
+      this.counter,
+      this.name
+    ]
 
     const variables = recurse(this.root, true);
 
-    fullState.e = variables.map((v) => {
+    fullState[3] = variables.map((v) => {
       const syncedObject = v[jsynchronous.reserved_property];
       if (syncedObject === undefined) {
          throw `Jsynchronous sanity error - describe encountered a variable that was not being tracked.`;
@@ -611,29 +645,32 @@ function labelEmpty(source, target) {
     if (value === undefined) {
       allKeys = allKeys || Object.keys(source).map(k => Number(k));
       if (binarySearch(allKeys, i) >= 0) { 
-        target[i] = ACRONYMS['undefined'];
+        target[i] = TYPE_ENCODINGS['undefined'];
       } else {
-        target[i] = ACRONYMS['empty'];
+        target[i] = TYPE_ENCODINGS['empty'];
       }
     }
   }
 }
-function serialize(value) {
-  // Expects value to be either be a primitive or a syncedObject Proxy
-  const type = detailedType(value);
 
+// ----------------------------------------------------------------
+// Bandwidth-saving network encoding
+// ----------------------------------------------------------------
+function serialize(value, type) {
+  // Expects value to be either be a primitive or a syncedObject Proxy
+  const serialized = [TYPE_ENCODINGS[type]]
   if (isPrimitive(type)) {
-    return serializePrimitive(value, type);
+    serialized.push(serializePrimitive(value, type));
   } else {
-    return serializeEnumerable(value);
+    serialized.push(serializeEnumerable(value));
   }
+  return serialized;
 }
 function serializePrimitive(value, type) {
-  const serialized = {t: ACRONYMS[type]}
-  if (type === 'string' || type === 'number') serialized.v = value;
-  if (type === 'boolean') serialized.v = !!value ? 1 : 0;
-  if (type === 'bigint')  serialized.v = String(value) + 'n';
-  return serialized;
+  if (type === 'string' || type === 'number') return value;
+  if (type === 'boolean')                     return !!value ? 1 : 0;
+  if (type === 'bigint')                      return String(value) + 'n';
+  throw `Jsynchronous sanity error - Primitive is unserializable ${type}, ${value}`;
 }
 function serializeEnumerable(value) {
   const syncedObject = value[jsynchronous.reserved_property];
@@ -642,5 +679,5 @@ function serializeEnumerable(value) {
     throw `Jsynchronous sanity error - synced object is referencing a non-synced variable.`;
   }
 
-  return [syncedObject.hash];  // Via convention any syncedObject reference is wrapped in an array to indicate it's not a primitive.
+  return syncedObject.hash;  // Via convention any syncedObject reference is wrapped in an array to indicate it's not a primitive.
 }
