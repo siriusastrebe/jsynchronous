@@ -289,6 +289,6 @@ function jsynchronousSetup() {
 jsynchronousSetup();
 
 exports = jsynchronous;
-if (module) {
+if (typeof module === 'object') {
   module.exports = jsynchronous;
 }
