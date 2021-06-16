@@ -1,0 +1,15 @@
+<html>
+<script src="/jsynchronous-client.js"></script>
+<script src="/primus/primus.js"></script>
+<script>
+  const primus = Primus('ws://localhost:8080', {protocol: 'ws:', port: 8080});
+
+  primus.on('data', function message(data) {
+    jsynchronous.onmessage(data);
+    console.log(jsynchronous());
+    document.body.innerHTML = JSON.stringify(jsynchronous());
+  });
+</script>
+<body>
+</body>
+</html>
