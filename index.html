@@ -3,13 +3,12 @@
 <script src="/jsynchronous-client.js"></script>
 <script>
   const socket = io();
-  const jsync = jsynchronous();
 
   socket.on('msg', function (a, b, c) {
     // console.log(a);
-    jsync.onmessage(a);
+    jsynchronous.onmessage(a);
 
-    console.log(jsync.get());
+    console.log(jsynchronous());
   });
 </script>
 <body>

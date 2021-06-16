@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const jsynchronous = require('./jsynchronous.js');
 const util = require('util');
+const http = require('http');
 
 const app = express();
 const port = 3000;
@@ -12,11 +13,67 @@ const port = 3000;
 
 
 
+
+
 // Jsynchronous
 jsynchronous.send = (websocket, data) => {
   websocket.emit('msg', data);
   console.log('☐', data.length);
 }
+
+const physics = {velocity: {x: -3.0, y: 8.4, z: 0}};
+const gameState = jsynchronous(physics);
+
+
+setTimeout(() => {
+  gameState.velocity.x += 1;
+  gameState.velocity.y -= 9.81;
+}, 1000);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//function everything() {
+const a = {
+  string: '$†®îñG',
+  integer: 123467890,
+  floating: 3.141592653589793,
+  bigint: BigInt('9999999999999999999999999'),
+  null: null,
+  undefined: undefined,
+  bool1: true,
+  bool2: false,
+  array: [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233],
+  deep: {a: {very: {deeply: {nested: {data: ['structure']}}}}},
+  circular: [[[]]]
+}
+a.circular[0][0][0] = a;
+//  return a;
+//}
+//
+//const everyDataType = jsynchronous(everything());
+//
+//
+//setInterval(() => {
+//  everyDataType.oneleveldeeper = everything();
+//}, 12000);
 
 //a = []
 //b = []
@@ -107,18 +164,18 @@ jsynchronous.send = (websocket, data) => {
 //  gameState.obj1.empties.length = gameState.obj1.empties.length + 1;
 //}, 5000);
 
-const initial = []
-for (let i=0; i<1000000; i++) {
-  initial.push(i % 2 == 0 ? i : -i);
-}
-
-const gameState = jsynchronous(initial);
-
-setTimeout(() => {
-for (let i=0; i<1000000; i++) {
-  gameState.push(i % 2 == 0 ? i : -i);
-}
-}, 5000);
+//const initial = []
+//for (let i=0; i<1000000; i++) {
+//  initial.push(i % 2 == 0 ? i : -i);
+//}
+//
+//const gameState = jsynchronous(initial);
+//
+//setTimeout(() => {
+//for (let i=0; i<1000000; i++) {
+//  gameState.push(i % 2 == 0 ? i : -i);
+//}
+//}, 5000);
 
 
 

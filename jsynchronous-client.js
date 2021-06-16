@@ -1,4 +1,6 @@
-var jsynchronous = function () {
+var jsynchronous;
+
+function jsynchronousSetup() {
   var TYPE_ENCODINGS = [
     'array',
     'object',
@@ -118,7 +120,6 @@ var jsynchronous = function () {
 
     return variable;
   }
-
 
   function resolveReferences(jsync) {
     var references = jsync.staging.references;
@@ -278,14 +279,16 @@ var jsynchronous = function () {
       }
     }
   }
-
   // ----------------------------------------------------------------
   // Entry point
   // ----------------------------------------------------------------
-  return {
-    onmessage: onmessage,
-    get: get
-  }
-};
+  jsynchronous = get;
+  jsynchronous.get = get;
+  jsynchronous.onmessage = onmessage;
+}
+jsynchronousSetup();
 
 exports = jsynchronous;
+if (module) {
+  module.exports = jsynchronous;
+}

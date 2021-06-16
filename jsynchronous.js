@@ -365,9 +365,9 @@ class JSynchronous {
   sendPackets() {
     this.bufferTimeout = undefined;
 
-    let min;
+    let min = 0;
     let counter;
-    let max;
+    let max = 0;
 
     const changes = this.queuedCommunications.map((c) => {
       if (counter === undefined) {
@@ -384,7 +384,7 @@ class JSynchronous {
     });
 
     if (changes.length-1 !== max - min) {
-      throw `Jsynchronous sanity error - Attempting to send changes but size of changes doesn't match the final tally`;
+      throw `Jsynchronous sanity error - Attempting to send changes but size of changes doesn't match the final tally. Expected ${changes.length} got ${max - min}`;
     }
 
     this.listeners.forEach((listener) => {
