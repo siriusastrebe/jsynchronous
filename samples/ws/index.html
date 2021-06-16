@@ -1,0 +1,22 @@
+<html>
+<script src="/jsynchronous-client.js"></script>
+<script>
+  const ws = new WebSocket('ws://localhost:8080');
+  
+  ws.onopen = function open() {
+    console.log('connected');
+  };
+  
+  ws.onclose = function close() {
+    console.log('disconnected');
+  };
+  
+  ws.onmessage = function incoming(data) {
+    jsynchronous.onmessage(data.data);
+    console.log(jsynchronous());
+    document.body.innerHTML = JSON.stringify(jsynchronous());
+  };
+</script>
+<body>
+</body>
+</html>
