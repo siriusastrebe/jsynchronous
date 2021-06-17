@@ -4,20 +4,18 @@ const WebSocket = require('ws');
 const jsynchronous = require('../../jsynchronous.js');
 
 jsynchronous.send = (websocket, data) => {
-  console.log(`${(data.length/1000).toFixed(3)} kB`);   
   websocket.write(data);
+  console.log(`${(data.length/1000).toFixed(2)} kB`);   
 }
 
-const physics = jsynchronous({position: [2, 0, 0], velocity: [0, 0, 0], acceleration: [0.001, -0.008, 0.0002]})
+const physics = jsynchronous({
+  x: 1,
+  y: 0, 
+  z: 0,
+})
 
 setInterval(() => {
-  physics.velocity[0] += physics.acceleration[0];
-  physics.velocity[1] += physics.acceleration[1];
-  physics.velocity[2] += physics.acceleration[2];
-
-  physics.position[0] += physics.velocity[0];
-  physics.position[1] += physics.velocity[1];
-  physics.position[2] += physics.velocity[2];
+  physics.x = physics.x * 2;
 }, 1000);
 
 // Primus websocket server

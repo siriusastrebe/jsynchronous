@@ -371,14 +371,13 @@ class JSynchronous {
 
     const changes = this.queuedCommunications.map((c) => {
       if (counter === undefined) {
-        counter = c.id;
         min = c.id;
       } else if (counter+1 !== c.id) {
         throw `Jsynchronous sanity error - Attempting to send changes but they're not ascending order`;
-      } else {
-        counter = c.id;
-        max = c.id;
       }
+
+      counter = c.id;
+      max = c.id;
 
       return c.encode();
     });

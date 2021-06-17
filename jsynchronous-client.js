@@ -24,7 +24,10 @@ function jsynchronousSetup() {
   ]
 
   var jsyncs = {}
-  var recentJsync;
+  var primaryJsync;
+
+  var standInPrimaryVariable;
+  var standInNamedVariables = {}
 
   function onmessage(data) {
     var json = JSON.parse(data);
@@ -45,12 +48,39 @@ function jsynchronousSetup() {
     }
   }
 
-  function get(name) {
+  function get(name, standInType) {
+    var existing;
+
     if (name) {
-      return jsyncs[name];
-    } else if (recentJsync) {
-      return recentJsync.root;
+      if (jsyncs[name]) {
+        return jsyncs[name].root;
+      } else if (standInNamedVariables[name].root) {
+        return standInNamedVariable[name].root;
+      } else if (standInType) {
+        return createStandInVariable(name, standInType).root;
+      } else {
+        var errorString = "jsynchronous() error - No synchronized variable available by name " + name + ". ";
+        if (!primaryJsync) {
+        } else {
+          errorString += "Either connection has not been established, or .$sync has not yet been called on the server for this client. ";
+        }
+        errorString += "Use jsynchronous(name, 'array') to generate a stand-in array or jsynchronous(name, 'object') to create a stand-in object. This stand-in variable will be automatically updated once synchronization succeeds.";
+
+        throw errorString;
+      }
+    } else if (primaryJsync) {
+      return primaryJsync.root;
+    } else if (standInPrimaryVariable) {
+      return standInPrimaryVariable.root
+    } else if (standInType) {
+      return createStandInVariable(undefined, standInType).root;
+    } else {
+      throw "jsynchronous() error - No synchronized variable available. Either connection has not been established, or .$sync has not yet been called on the server for this client. Use jsynchronous('', 'array') to generate a stand-in array or jsynchronous('', 'object') to create a stand-in object. This stand-in variable will be automatically updated once synchronization succeeds.";
     }
+  }
+
+  function createStandInType() {
+
   }
 
   function newJsynchronousVariable(name, counter, variables) {
@@ -65,7 +95,7 @@ function jsynchronousSetup() {
     }
 
     jsyncs[name] = jsync;
-    recentJsync = jsync;
+    primaryJsync = jsync;
 
     processInitialDescription(variables, jsync);
   }
@@ -125,8 +155,9 @@ function jsynchronousSetup() {
     var references = jsync.staging.references;
     for (var j=0; j<references.length; j++) {
       var r = references[j];
-      var variable = resolveSyncedVariable(r.hash, jsync);
-      r.variable[r.prop] = variable;
+      var childDetails = resolveSyncedVariable(r.hash, jsync);
+      linkParent(r, childDetails, r.prop);
+      r.variable[r.prop] = childDetails.variable;
     }
     jsync.staging.references.length = 0;
   }
@@ -184,7 +215,9 @@ function jsynchronousSetup() {
     if (isPrimitive(type)) {
       value = resolvePrimitive(type, newDetails[1]);
     } else {
-      value = resolveSyncedVariable(newDetails[1], jsync);
+      var childDetails = resolveSyncedVariable(newDetails[1], jsync);
+      linkParent(object, childDetails, prop);
+      value = details.variable;
     }
 
     object[prop] = value;
@@ -195,6 +228,8 @@ function jsynchronousSetup() {
     if (details === undefined) {
       throw "Jsynchronous error - Prop deletion for an object hash " + hash + " that is not registered with the synchronized variable by name " + jsync.name;
     }
+
+    unlinkParent(details, prop);
 
     var object = details.variable;
 
@@ -240,7 +275,7 @@ function jsynchronousSetup() {
     if (details === undefined) {
       throw "Jsynchronous error - Referenced variable can't be found with hash " + hash;
     }
-    return details.variable;
+    return details;
   }
   function isPrimitive(type) {
     if (type === 'number'    ||

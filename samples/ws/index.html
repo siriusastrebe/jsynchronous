@@ -10,6 +10,8 @@
   ws.onclose = function close() {
     console.log('disconnected');
   };
+
+  jsynchronous();
   
   ws.onmessage = function incoming(data) {
     jsynchronous.onmessage(data.data);
