@@ -3,7 +3,7 @@
 <script>
   const ws = new WebSocket('ws://localhost:8080');
 
-  $ynced = jsynchronous('', 'object');
+  $ynced = jsynchronous('physics', 'array');
 
   ws.onopen = function open() {
     console.log('connected');
@@ -13,11 +13,9 @@
     console.log('disconnected');
   };
 
-  //jsynchronous();
-
   ws.onmessage = function incoming(data) {
     jsynchronous.onmessage(data.data);
-    console.log($ynced, jsynchronous());
+    console.log($ynced);
     document.body.innerHTML = JSON.stringify($ynced);
   };
 </script>

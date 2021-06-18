@@ -10,7 +10,7 @@ jsynchronous.send = (websocket, data) => {
 }
 
 const physics = {velocity: {x: 5, y: -2.04}};
-const $ynchronized = jsynchronous(physics);
+const $ynchronized = jsynchronous(physics, {name: 'physics'});
 
 setInterval(() => {
   $ynchronized.velocity.x += 5;

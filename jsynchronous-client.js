@@ -36,9 +36,9 @@ function jsynchronousSetup() {
     if (op === 'initial') {
       var name = json[1];
       var counter = json[2];
-      var variables = json[3];
+      var variableData = json[3];
 
-      newJsynchronousVariable(name, counter, variables);
+      newJsynchronousVariable(name, counter, variableData);
     } else if (op === 'changes') {
       var name = json[1];
       var minCounter = json[2];
@@ -78,12 +78,9 @@ function jsynchronousSetup() {
 
   function standInVariable(name, type) {
     if (!name) {
-console.log('a');
       if (standInPrimaryVariable) {
-console.log('b');
         return standInPrimaryVariable;
       } else {
-console.log('c');
         standInPrimaryVariable = newCollection(type);
         // TODO: Assign methods to variable
         return standInPrimaryVariable;
@@ -98,7 +95,7 @@ console.log('c');
     }
   }
 
-  function newJsynchronousVariable(name, counter, variables) {
+  function newJsynchronousVariable(name, counter, data) {
     var jsync = {
       name: name,
       counter: counter,  // Counter will always be 1 above the last packet
@@ -110,19 +107,9 @@ console.log('c');
     }
 
     jsyncs[name] = jsync;
-    if (primaryJsync === undefined) {
+    if (primaryJsync === undefined) {  
+      // TODO: This makes the primary variable determined by first-to-arrive. The server should determine primary variable first-to-send.
       primaryJsync = jsync;
-    }
-
-    processInitialDescription(name, variables, jsync);
-  }
-
-  function processInitialDescription(name, data, jsync) {
-    var root;
-    if (name && standInNamedVariables[name]) {
-      root = standInNamedVariables[name];
-    } else if (primaryJsync === jsync && standInPrimaryVariable) {
-      root = standInPrimaryVariable;
     }
 
     for (var i=0; i<data.length; i++) {
@@ -130,7 +117,7 @@ console.log('c');
       var hash = d[0];
       var type = TYPE_ENCODINGS[d[1]];
       var each = d[2];
-      var description = createSyncedVariable(i === 0 ? root : undefined, hash, type, each, jsync); 
+      var description = createSyncedVariable(hash, type, each, jsync, (i === 0)); 
 
       if (i === 0) {  // Convention is 0th element is root
         jsync.root = description;
@@ -142,14 +129,32 @@ console.log('c');
     return jsync.root;
   }
 
-  function createSyncedVariable(defaultVariable, hash, type, each, jsync) {
+  function createSyncedVariable(hash, type, each, jsync, isRoot) {
     // This function expects resolveReferences() to be called after all syncedVariables in the payload are processed
+    var standIn;
+    if (isRoot) {
+      var name = jsync.name;
+      var standInName = '';
+      if (name && standInNamedVariables[name]) {
+        standIn = standInNamedVariables[name];
+        standInName = jsync.name;
+      } else if (primaryJsync === jsync && standInPrimaryVariable) {
+        standIn = standInPrimaryVariable;
+      }
+
+      var standInType = detailedType(standIn)
+      if (standIn && standInType !== type) {
+        standIn = undefined;
+        console.error( "jsynchronous('" + standInName + "', '" + standInType + "') is the wrong variable type, the type originating from the server is '" + type + "'. Your stand-in variable is unable to reference the synchronized variable." )
+      }
+    }
+
     var details = {
       hash: hash,
       type: type,
       linked: {},   // key->value corresponds to prop->childDetails
       parents: {},  // key->value corresponds to parentHash->[properties]
-      variable: defaultVariable || newCollection(type)
+      variable: standIn || newCollection(type)
     }
 
     jsync.objects[hash] = details;
@@ -162,7 +167,7 @@ console.log('c');
         if (t !== 'empty') {
           details.variable[prop] = resolvePrimitive(t, v);
         }
-      } else {  
+      } else {
         var reference = {
           details: details,
           prop: prop,
@@ -294,6 +299,27 @@ console.log('c');
       return undefined;  // Functions are, for now, read-only
     }
   }
+  function detailedType(value) {
+    const type = typeof value;
+    if (type !== 'object') {
+      return type;  // 'boolean' 'string' 'undefined' 'number' 'bigint' 'symbol'
+    } else if (value === null) {
+      return 'null';  // Special case made for typeof null === 'object'
+    } else if (type === 'function') {
+      return 'function';
+    } else if (value.constructor && value.constructor() === 'object') {
+      return 'object';  // Easy catch-all for object type
+    } else if (value instanceof Date) {
+      return 'date';
+    } else if (value instanceof RegExp) {
+      return 'regex';
+    } else if (Array.isArray(value)) {
+      return 'array';
+    } else {
+      return 'object'  // If we can't figure out what it is, most things in javascript are objects
+    }
+  }
+
   function resolveSyncedVariable(hash, jsync) {
     var details = jsync.objects[hash];
     if (details === undefined) {
@@ -319,7 +345,7 @@ console.log('c');
 
   function newCollection(type, sampleObj) {
     if (type === 'array') {
-      return new Array(sampleObj.length);
+      return new Array(sampleObj ? sampleObj.length : 0);
     } else if (type === 'object') {
       return {};
     } else {
