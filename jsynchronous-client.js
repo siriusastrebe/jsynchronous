@@ -54,33 +54,48 @@ function jsynchronousSetup() {
     if (name) {
       if (jsyncs[name]) {
         return jsyncs[name].root;
-      } else if (standInNamedVariables[name].root) {
-        return standInNamedVariable[name].root;
       } else if (standInType) {
-        return createStandInVariable(name, standInType).root;
+        return standInVariable(name, standInType);
       } else {
         var errorString = "jsynchronous() error - No synchronized variable available by name " + name + ". ";
-        if (!primaryJsync) {
-        } else {
+        if (primaryJsync) {
           errorString += "Either connection has not been established, or .$sync has not yet been called on the server for this client. ";
         }
-        errorString += "Use jsynchronous(name, 'array') to generate a stand-in array or jsynchronous(name, 'object') to create a stand-in object. This stand-in variable will be automatically updated once synchronization succeeds.";
-
+        errorString += "Use jsynchronous(name, 'array') to create a stand-in array or jsynchronous(name, 'object') to create a stand-in object. This stand-in variable will be automatically populated once synchronization succeeds.";
         throw errorString;
       }
     } else if (primaryJsync) {
       return primaryJsync.root;
-    } else if (standInPrimaryVariable) {
-      return standInPrimaryVariable.root
     } else if (standInType) {
-      return createStandInVariable(undefined, standInType).root;
+      return standInVariable(name, standInType);
     } else {
-      throw "jsynchronous() error - No synchronized variable available. Either connection has not been established, or .$sync has not yet been called on the server for this client. Use jsynchronous('', 'array') to generate a stand-in array or jsynchronous('', 'object') to create a stand-in object. This stand-in variable will be automatically updated once synchronization succeeds.";
+      throw "jsynchronous() error - No synchronized variable available. Either connection has not been established, or .$sync has not yet been called on the server for this client. Use jsynchronous('', 'array') to generate a stand-in array or jsynchronous('', 'object') to create a stand-in object. This stand-in variable will be automatically populated once synchronization succeeds.";
     }
   }
+  function list() {
+    return Object.keys(jsyncs);
+  }
 
-  function createStandInType() {
-
+  function standInVariable(name, type) {
+    if (!name) {
+console.log('a');
+      if (standInPrimaryVariable) {
+console.log('b');
+        return standInPrimaryVariable;
+      } else {
+console.log('c');
+        standInPrimaryVariable = newCollection(type);
+        // TODO: Assign methods to variable
+        return standInPrimaryVariable;
+      }
+    } else {
+      if (standInNamedVariables[name]) {
+        return standInNamedVariable[name];
+      } else {
+        standInNamedVariables[name] = newCollection(type);
+        return standInNamedVariables[name];
+      }
+    }
   }
 
   function newJsynchronousVariable(name, counter, variables) {
@@ -95,21 +110,30 @@ function jsynchronousSetup() {
     }
 
     jsyncs[name] = jsync;
-    primaryJsync = jsync;
+    if (primaryJsync === undefined) {
+      primaryJsync = jsync;
+    }
 
-    processInitialDescription(variables, jsync);
+    processInitialDescription(name, variables, jsync);
   }
 
-  function processInitialDescription(data, jsync) {
+  function processInitialDescription(name, data, jsync) {
+    var root;
+    if (name && standInNamedVariables[name]) {
+      root = standInNamedVariables[name];
+    } else if (primaryJsync === jsync && standInPrimaryVariable) {
+      root = standInPrimaryVariable;
+    }
+
     for (var i=0; i<data.length; i++) {
       var d = data[i];
       var hash = d[0];
       var type = TYPE_ENCODINGS[d[1]];
       var each = d[2];
-      var variable = createSyncedVariable(hash, type, each, jsync); 
+      var description = createSyncedVariable(i === 0 ? root : undefined, hash, type, each, jsync); 
 
       if (i === 0) {  // Convention is 0th element is root
-        jsync.root = variable;
+        jsync.root = description;
       }
     }
 
@@ -118,14 +142,14 @@ function jsynchronousSetup() {
     return jsync.root;
   }
 
-  function createSyncedVariable(hash, type, each, jsync) {
+  function createSyncedVariable(defaultVariable, hash, type, each, jsync) {
     // This function expects resolveReferences() to be called after all syncedVariables in the payload are processed
-    var variable = newCollection(type, each); 
-
     var details = {
       hash: hash,
       type: type,
-      variable: variable
+      linked: {},   // key->value corresponds to prop->childDetails
+      parents: {},  // key->value corresponds to parentHash->[properties]
+      variable: defaultVariable || newCollection(type)
     }
 
     jsync.objects[hash] = details;
@@ -136,11 +160,11 @@ function jsynchronousSetup() {
 
       if (isPrimitive(t)) {
         if (t !== 'empty') {
-          variable[prop] = resolvePrimitive(t, v);
+          details.variable[prop] = resolvePrimitive(t, v);
         }
       } else {  
         var reference = {
-          variable: variable,
+          details: details,
           prop: prop,
           hash: v
         }
@@ -148,7 +172,7 @@ function jsynchronousSetup() {
       }
     });
 
-    return variable;
+    return details.variable;
   }
 
   function resolveReferences(jsync) {
@@ -156,8 +180,8 @@ function jsynchronousSetup() {
     for (var j=0; j<references.length; j++) {
       var r = references[j];
       var childDetails = resolveSyncedVariable(r.hash, jsync);
-      linkParent(r, childDetails, r.prop);
-      r.variable[r.prop] = childDetails.variable;
+      linkParent(r.details, childDetails, r.prop);
+      r.details.variable[r.prop] = childDetails.variable;
     }
     jsync.staging.references.length = 0;
   }
@@ -216,7 +240,7 @@ function jsynchronousSetup() {
       value = resolvePrimitive(type, newDetails[1]);
     } else {
       var childDetails = resolveSyncedVariable(newDetails[1], jsync);
-      linkParent(object, childDetails, prop);
+      linkParent(details, childDetails, prop);
       value = details.variable;
     }
 
@@ -229,7 +253,7 @@ function jsynchronousSetup() {
       throw "Jsynchronous error - Prop deletion for an object hash " + hash + " that is not registered with the synchronized variable by name " + jsync.name;
     }
 
-    unlinkParent(details, prop);
+    //unlinkParent(details, prop);
 
     var object = details.variable;
 
@@ -238,7 +262,7 @@ function jsynchronousSetup() {
     // TODO: Trigger .on() changes here. If we're going to link/unlink parent on the client side, here would be the place.
   }
   function newObject(hash, type, each, jsync) {
-    createSyncedVariable(hash, TYPE_ENCODINGS[type], each, jsync); 
+    createSyncedVariable(undefined, hash, TYPE_ENCODINGS[type], each, jsync); 
   }
   function endObject(hash, jsync) {
     var details = jsync.objects[hash];
@@ -314,12 +338,41 @@ function jsynchronousSetup() {
       }
     }
   }
+  function linkParent(parentDetails, childDetails, prop) {
+    parentDetails.linked[prop] = childDetails;
+
+    if (childDetails.parents[parentDetails.hash] === undefined) {
+      childDetails.parents[parentDetails.hash] = [prop];
+    } else if (childDetails.parents[parentHash].indexOf(prop) === -1) {
+      childDetails.parents[parentDetails.hash].push(prop);
+    }
+  }
+  function unlinkParent(parentDetails, prop) {
+    var childDetails = parentDetails.linked[prop];
+
+    var properties = childDetails.parents[parentHash];
+    if (properties) {
+      var index = properties.indexOf(prop);
+      if (index !== -1) {
+        properties.splice(index, 1);
+      }
+    }
+
+    delete parentDetails.linked[prop];
+
+    if (properties.length === 0) {
+      delete this.parents[parentHash];
+    }
+
+    // We don't have to garbage collect the child, that should be triggered by the 'end' operation coming from the server
+  }
   // ----------------------------------------------------------------
   // Entry point
   // ----------------------------------------------------------------
   jsynchronous = get;
   jsynchronous.get = get;
   jsynchronous.onmessage = onmessage;
+  jsynchronous.list = list;
 }
 jsynchronousSetup();
 

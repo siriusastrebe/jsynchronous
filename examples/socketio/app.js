@@ -11,15 +11,15 @@ jsynchronous.send = (websocket, data) => {
   console.log(`${(data.length/1000).toFixed(2)} kB`);   
 }
 
-const physics = jsynchronous({
-  x: 1,
-  y: 0, 
-  z: 0,
-})
+
+const physics = {velocity: {x: 5, y: -2.04}};
+const $ynchronized = jsynchronous(physics);
 
 setInterval(() => {
-  physics.x = physics.x * 2;
+  $ynchronized.velocity.x += 5;
+  $ynchronized.velocity.y -= 9.81;
 }, 1000);
+
 
 // Express
 const server = app.listen(port, () => {
@@ -30,7 +30,7 @@ const server = app.listen(port, () => {
 const io = new Server(server);
 
 io.on('connection', (socket) => {
-  physics.$sync(socket);  
+  physics.$ync(socket);  
 });
 
 // Routes

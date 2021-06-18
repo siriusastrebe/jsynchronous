@@ -238,7 +238,7 @@ class SyncedObject {
 
     if (this.parents[parentHash] === undefined) {
       this.parents[parentHash] = [prop];
-    } else {
+    } else if (this.parents[parentHash].indexOf(prop) === -1) {
       this.parents[parentHash].push(prop);
     }
   }
@@ -307,10 +307,10 @@ class JSynchronous {
     // You can reference jsynchronized variables from other places in your app. Be careful however, when assigning object and arrays to synchronized variables. The ALL of the contents will become visible to the connected clients.
 
     // These variables are special method names on the root of a jsynchronized variable. They will throw an error if you reassign these methods, so you can rename these methods by passing them into the options.
-    this.jsyncReservedWord = options.jsync || '$sync';
+    this.jsyncReservedWord = options.jsync || '$ync';
     this.onmessageReservedWord = options.onmessage || '$onmessage';
     this.unsyncReservedWord = options.unsync || '$unsync';
-    this.startsyncReservedWord = options.startsync || '$startsync';
+    this.startsyncReservedWord = options.startsync || '$tart';
     this.listenersReservedWord = options.listeners || '$listeners';
 
     // Cerce this. to refer to this jsynchronous instance
@@ -453,9 +453,6 @@ class JSynchronous {
     return fullState;
   }
 }
-
-
-
 
 // ----------------------------------------------------------------
 // Entrypoint into the jsynchronous library

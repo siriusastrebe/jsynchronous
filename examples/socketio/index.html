@@ -1,0 +1,18 @@
+<html>
+<script src="/socket.io/socket.io.js"></script>
+<script src="/jsynchronous-client.js"></script>
+<script>
+  const socket = io();
+
+  const $ynced = jsynchronous('', 'object');
+
+  socket.on('msg', function (data) {
+
+    jsynchronous.onmessage(data);
+    console.log($ynced);
+    document.body.innerHTML = JSON.stringify($ynced);
+  });
+</script>
+<body>
+</body>
+</html>

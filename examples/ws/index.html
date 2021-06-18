@@ -2,21 +2,23 @@
 <script src="/jsynchronous-client.js"></script>
 <script>
   const ws = new WebSocket('ws://localhost:8080');
-  
+
+  $ynced = jsynchronous('', 'object');
+
   ws.onopen = function open() {
     console.log('connected');
   };
-  
+
   ws.onclose = function close() {
     console.log('disconnected');
   };
 
-  jsynchronous();
-  
+  //jsynchronous();
+
   ws.onmessage = function incoming(data) {
     jsynchronous.onmessage(data.data);
-    console.log(jsynchronous());
-    document.body.innerHTML = JSON.stringify(jsynchronous());
+    console.log($ynced, jsynchronous());
+    document.body.innerHTML = JSON.stringify($ynced);
   };
 </script>
 <body>
