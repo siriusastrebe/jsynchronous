@@ -53,7 +53,7 @@ function jsynchronousSetup() {
 
     if (name) {
       if (jsyncs[name]) {
-        return jsyncs[name].root;
+        return jsyncs[name].root.variable;
       } else if (standInType) {
         return standInVariable(name, standInType);
       } else {
@@ -65,7 +65,7 @@ function jsynchronousSetup() {
         throw errorString;
       }
     } else if (primaryJsync) {
-      return primaryJsync.root;
+      return primaryJsync.root.variable;
     } else if (standInType) {
       return standInVariable(name, standInType);
     } else {
@@ -177,7 +177,7 @@ function jsynchronousSetup() {
       }
     });
 
-    return details.variable;
+    return details;
   }
 
   function resolveReferences(jsync) {
@@ -220,7 +220,7 @@ function jsynchronousSetup() {
       } else if (op === 'new') {
         var type = change[2];
         var each = change[3];
-        newObject(hash, type, each, jsync);
+        createSyncedVariable(hash, TYPE_ENCODINGS[type], each, jsync); 
       } else if (op === 'end') {
         endObject(hash, jsync);
       } else {
@@ -246,11 +246,13 @@ function jsynchronousSetup() {
     } else {
       var childDetails = resolveSyncedVariable(newDetails[1], jsync);
       linkParent(details, childDetails, prop);
-      value = details.variable;
+      value = childDetails.variable;
     }
 
     object[prop] = value;
-    // TODO: Trigger .on() changes here
+
+    // TODO: support oldValue
+    triggerEvents('set', details, prop, value, jsync);
   }
   function del(hash, prop, jsync) {
     var details = jsync.objects[hash];
@@ -265,9 +267,6 @@ function jsynchronousSetup() {
     delete object[prop];
 
     // TODO: Trigger .on() changes here. If we're going to link/unlink parent on the client side, here would be the place.
-  }
-  function newObject(hash, type, each, jsync) {
-    createSyncedVariable(undefined, hash, TYPE_ENCODINGS[type], each, jsync); 
   }
   function endObject(hash, jsync) {
     var details = jsync.objects[hash];
@@ -364,6 +363,110 @@ function jsynchronousSetup() {
       }
     }
   }
+  function addSynchronizedVariableMethods(details) {
+    details.changeEvents = [];
+    details.setEvents = [];
+    details.delEvents = [];
+    details.variable.$on = function (event, firstArg, secondArg, thirdArg) {
+      var props;
+      var options;
+      var callback;
+
+      for (let i=0; i<3; i++) {
+        var arg = [firstArg, secondArg, thirdArg][i];
+        var argType = detailedType(arg);
+        if (argType === 'array') {
+          props = arg;
+        } else if (argType === 'object') {
+          options = arg;
+        } else if (argType === 'function') {
+          callback = arg;
+        }
+      }
+
+      if (callback === undefined) {
+        throw ".$on('" + event + "') needs to be provided a callback";
+      }
+
+      var e = {props: props, options: options, callback: callback};
+      if (event === 'change') {
+        changeEvents.push(e)
+      } else if (event === 'set') {
+        setEvents.push(e);
+      } else if (event === 'del') {
+        delEvents.push(e);
+      }
+    }
+  }
+
+  function triggerEvents(event, details, prop, value, jsync) {
+    var ancestryTree = findAncestryTree(jsync, details)
+    var propertyTree = findPropertyTree(ancestryTree, jsync.root.hash, details.hash, prop, event);
+    console.log(event, propertyTree);
+  }
+
+  function findAncestryTree(jsync, details, from, prop, visited) {
+    // Walks up the ancestry, collecting visited hashes, its properties and referenced hashes
+    var startOfRecursion = (prop === undefined && from === undefined);
+    var recur = true;
+
+    if (visited == undefined) {
+      visited = {};  // key->value corresponds to hash->{prop: value's-hash}
+    }
+
+    if (visited[details.hash] === undefined) {
+      visited[details.hash] = {};
+    } else {
+      recur = false;  // Visited already
+    }
+
+    if (startOfRecursion === false) {
+      visited[details.hash][prop] = from.hash;
+    }
+
+    if (recur) {
+      for (var hash in details.parents) {
+        var parent = jsync.objects[hash];
+        var properties = details.parents[hash];
+
+        if (parent === undefined) {
+          throw "Jsynchronous sanity error - finding ancestry tree encountered a parent that is not present in the synchronized objects list.";
+        }
+
+        for (let i=0; i<properties.length; i++) {
+          var property = properties[i];
+          findAncestryTree(jsync, parent, details, property, visited);
+        }
+      }
+    }
+
+    return visited;
+  }
+
+  function findPropertyTree(ancestryTree, currentHash, targetHash, targetProp, targetValue, hashesSeen) {
+    // Walks down descendants of provided hash, creating a nested object with each of its keys as properties that lead to targetHash.
+    var props = {}; 
+    var propsValues = ancestryTree[currentHash];
+
+    if (currentHash === targetHash) {
+      return {targetProp: targetValue};
+    }
+
+    if (hashesSeen === undefined) hashesSeen = [currentHash];
+
+    for (var prop in propsValues) {
+      var childHash = propsValues[prop];
+      if (hashesSeen.indexOf(childHash) === -1) {
+        var hashesSeenCopy = hashesSeen.slice();
+        hashesSeenCopy.push(childHash);
+
+        props[prop] = findPropertyTree(ancestryTree, childHash, targetHash, targetProp, targetValue, hashesSeenCopy);
+      }
+    }
+
+    return props;
+  }
+
   function linkParent(parentDetails, childDetails, prop) {
     parentDetails.linked[prop] = childDetails;
 

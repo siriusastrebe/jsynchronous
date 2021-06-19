@@ -21,18 +21,13 @@ jsynchronous.send = (websocket, data) => {
   console.log('☐', data.length);
 }
 
-const physics = {velocity: {x: -3.0, y: 8.4, z: 0}};
-const gameState = jsynchronous(physics);
+const nested = {a1: {b1: {c1: {d1: true}}}};
+const gameState = jsynchronous(nested);
 
-
-setTimeout(() => {
-  gameState.velocity.x += 1;
-  gameState.velocity.y -= 9.81;
-}, 1000);
-
-
-
-
+setInterval(() => {
+  const n = gameState.length;
+  gameState.a1.b1.c1.d1 = !gameState.a1.b1.c1.d1;
+}, 5000);
 
 
 
@@ -230,7 +225,7 @@ const io = new Server(server);
 
 io.on('connection', (socket) => {
   socket.emit('hello', {contents: 'world'});
-  gameState.$sync(socket);  
+  gameState.$ync(socket);  
 });
 
 

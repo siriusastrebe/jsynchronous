@@ -30,7 +30,7 @@ const server = app.listen(port, () => {
 const io = new Server(server);
 
 io.on('connection', (socket) => {
-  physics.$ync(socket);  
+  $ynchronized.$ync(socket);  
 });
 
 // Routes
