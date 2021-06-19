@@ -53,7 +53,7 @@ class Change {
       this.hash,
       this.prop,
       encode(this.value, this.type),
-      //encode(this.oldValue, this.oldType),
+      encode(this.oldValue, this.oldType),
       // TODO: Rewind mode and client-history cares about the old type
     ]
 

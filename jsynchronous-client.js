@@ -47,7 +47,7 @@ function jsynchronousSetup() {
 
   function get(name, standInType) {
     var existing;
-    if (name === undefined) {
+    if (!name) {
       name = '';
     }
 
@@ -241,6 +241,16 @@ function jsynchronousSetup() {
       value = childDetails.variable;
     }
 
+    var oldType = TYPE_ENCODINGS[oldDetails[0]];
+    var oldValue;
+
+    if (isPrimitive(oldType)) {
+      oldValuevalue = resolvePrimitive(oldType, oldDetails[1]);
+    } else {
+      var childDetails = resolveSyncedVariable(oldDetails[1], jsync);
+      oldValue = childDetails.variable;
+    }
+
     object[prop] = value;
 
     triggerEvents('set', details, prop, value, oldValue, jsync);
@@ -257,7 +267,7 @@ function jsynchronousSetup() {
 
     delete object[prop];
 
-    // TODO: Trigger .on() changes here. If we're going to link/unlink parent on the client side, here would be the place.
+    triggerEvents('delete', details, prop, undefined, oldValue, jsync);
   }
   function endObject(hash, jsync) {
     var details = jsync.objects[hash];
@@ -390,7 +400,7 @@ function jsynchronousSetup() {
     }
   }
 
-  function triggerEvents(event, details, prop, value, jsync) {
+  function triggerEvents(event, details, prop, value, oldValue, jsync) {
     var ancestryTree = findAncestryTree(jsync, details)
     var propertyTree = findPropertyTree(ancestryTree, jsync.root.hash, details.hash, prop, event);
     console.log(event, propertyTree);
