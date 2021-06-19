@@ -24,10 +24,7 @@ function jsynchronousSetup() {
   ]
 
   var jsyncs = {}
-  var primaryJsync;
-
-  var standInPrimaryVariable;
-  var standInNamedVariables = {}
+  var standIns = {}
 
   function onmessage(data) {
     var json = JSON.parse(data);
@@ -50,52 +47,28 @@ function jsynchronousSetup() {
 
   function get(name, standInType) {
     var existing;
+    if (name === undefined) {
+      name = '';
+    }
 
-    if (name) {
-      if (jsyncs[name]) {
-        return jsyncs[name].root.variable;
-      } else if (standInType) {
-        return standInVariable(name, standInType);
-      } else {
-        var errorString = "jsynchronous() error - No synchronized variable available by name " + name + ". ";
-        if (primaryJsync) {
-          errorString += "Either connection has not been established, or .$sync has not yet been called on the server for this client. ";
-        }
-        errorString += "Use jsynchronous(name, 'array') to create a stand-in array or jsynchronous(name, 'object') to create a stand-in object. This stand-in variable will be automatically populated once synchronization succeeds.";
-        throw errorString;
-      }
-    } else if (primaryJsync) {
-      return primaryJsync.root.variable;
+    if (jsyncs[name]) {
+      return jsyncs[name].root.variable;
     } else if (standInType) {
       return standInVariable(name, standInType);
     } else {
-      throw "jsynchronous() error - No synchronized variable available. Either connection has not been established, or .$sync has not yet been called on the server for this client. Use jsynchronous('', 'array') to generate a stand-in array or jsynchronous('', 'object') to create a stand-in object. This stand-in variable will be automatically populated once synchronization succeeds.";
+      var errorString = "jsynchronous() error - No synchronized variable available by name " + name + ". ";
+      if (Object.keys(jsyncs).length === 0) {
+        errorString += "Either connection has not been established, or .$sync has not yet been called on the server for this client. ";
+      }
+      errorString += "Use jsynchronous(name, 'array') to create a stand-in array or jsynchronous(name, 'object') to create a stand-in object. This stand-in variable will be automatically populated once synchronization succeeds.";
+      throw errorString;
     }
   }
   function list() {
     return Object.keys(jsyncs);
   }
 
-  function standInVariable(name, type) {
-    if (!name) {
-      if (standInPrimaryVariable) {
-        return standInPrimaryVariable;
-      } else {
-        standInPrimaryVariable = newCollection(type);
-        // TODO: Assign methods to variable
-        return standInPrimaryVariable;
-      }
-    } else {
-      if (standInNamedVariables[name]) {
-        return standInNamedVariable[name];
-      } else {
-        standInNamedVariables[name] = newCollection(type);
-        return standInNamedVariables[name];
-      }
-    }
-  }
-
-  function newJsynchronousVariable(name, counter, data) {
+  function jsyncObject(name, counter) {
     var jsync = {
       name: name,
       counter: counter,  // Counter will always be 1 above the last packet
@@ -105,12 +78,13 @@ function jsynchronousSetup() {
         references: []
       }
     }
+    return jsync;
+  }
+
+  function newJsynchronousVariable(name, counter, data) {
+    var jsync = jsyncObject(name, counter);
 
     jsyncs[name] = jsync;
-    if (primaryJsync === undefined) {  
-      // TODO: This makes the primary variable determined by first-to-arrive. The server should determine primary variable first-to-send.
-      primaryJsync = jsync;
-    }
 
     for (var i=0; i<data.length; i++) {
       var d = data[i];
@@ -129,23 +103,35 @@ function jsynchronousSetup() {
     return jsync.root;
   }
 
+  function standInVariable(name, type) {
+    if (standIns[name]) {
+      return standIns[name].root;
+    } else {
+      standIns[name] = jsyncObject(undefined, -1);
+      standIns[name].root = newCollection(type);
+      // TODO: Assign methods to variable
+      return standIns[name].root;
+    }
+  }
+
   function createSyncedVariable(hash, type, each, jsync, isRoot) {
     // This function expects resolveReferences() to be called after all syncedVariables in the payload are processed
     var standIn;
     if (isRoot) {
       var name = jsync.name;
-      var standInName = '';
-      if (name && standInNamedVariables[name]) {
-        standIn = standInNamedVariables[name];
-        standInName = jsync.name;
-      } else if (primaryJsync === jsync && standInPrimaryVariable) {
-        standIn = standInPrimaryVariable;
+      if (standIns[name]) {
+        standIn = standIns[name];
       }
+      var standInType = detailedType(standIn.root)
 
-      var standInType = detailedType(standIn)
       if (standIn && standInType !== type) {
         standIn = undefined;
-        console.error( "jsynchronous('" + standInName + "', '" + standInType + "') is the wrong variable type, the type originating from the server is '" + type + "'. Your stand-in variable is unable to reference the synchronized variable." )
+        console.error( "jsynchronous('" + name + "', '" + standInType + "') is the wrong variable type, the type originating from the server is '" + type + "'. Your stand-in variable is unable to reference the synchronized variable." )
+      }
+
+      // Copy events assigned to standIn while waiting on the synchronized variable
+      if (standIn) {
+        jsync.events = standIn.events;
       }
     }
 
@@ -154,7 +140,13 @@ function jsynchronousSetup() {
       type: type,
       linked: {},   // key->value corresponds to prop->childDetails
       parents: {},  // key->value corresponds to parentHash->[properties]
-      variable: standIn || newCollection(type)
+      variable: undefined
+    }
+
+    if (standIn) {
+      details.variable = standIn.root;
+    } else {
+      details.variable = newCollection(type);
     }
 
     jsync.objects[hash] = details;
@@ -251,8 +243,7 @@ function jsynchronousSetup() {
 
     object[prop] = value;
 
-    // TODO: support oldValue
-    triggerEvents('set', details, prop, value, jsync);
+    triggerEvents('set', details, prop, value, oldValue, jsync);
   }
   function del(hash, prop, jsync) {
     var details = jsync.objects[hash];
@@ -366,9 +357,7 @@ function jsynchronousSetup() {
   function addSynchronizedVariableMethods(details, targetVariable) {
     // targetVariable will be details.variable if it's synced. Otherwise it should be a stand-in variable
 
-    details.changeEvents = [];
-    details.setEvents = [];
-    details.delEvents = [];
+    details.events = [];
     targetVariable.variable.$on = function (event, firstArg, secondArg, thirdArg) {
       var props;
       var options;

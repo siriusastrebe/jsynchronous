@@ -6,6 +6,7 @@
 
   var $ynced = jsynchronous('', 'array');
   socket.on('msg', function (a, b, c) {
+    console.log($ynced);
     jsynchronous.onmessage(a);
     document.body.innerHTML = JSON.stringify(jsynchronous());
   });

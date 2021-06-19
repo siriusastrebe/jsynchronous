@@ -286,7 +286,6 @@ class SyncedObject {
   }
 }
 
-
 class JSynchronous {
   // JSynchronous handles a group of proxied objects starting at the root.
   // all of the socket communication and authentication is handled through JSynchronous
@@ -294,7 +293,7 @@ class JSynchronous {
     initial = initial || {}
     options = options || {}
 
-    this.name = options.name || noCollisionHash(syncedNames);
+    this.name = options.name || syncedNames[''] === undefined ? '' : noCollisionHash(syncedNames);
     this.startTime = new Date().getTime();
     this.objects = {};
     this.listeners = options.listeners || [];
