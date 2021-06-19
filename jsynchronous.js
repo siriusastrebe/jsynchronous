@@ -416,7 +416,7 @@ class JSynchronous {
       this.send(websocket, JSON.stringify(this.describe()));
     }
   }
-  un_sync() {
+  un_sync(websocket) {
     const index = this.listeners.indexOf(websocket);
     if (index !== -1) {
       this.listeners.splice(index, 1);

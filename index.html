@@ -4,7 +4,7 @@
 <script>
   const socket = io();
 
-  var $ynced = jsynchronous('', 'object');
+  var $ynced = jsynchronous('', 'array');
   socket.on('msg', function (a, b, c) {
     jsynchronous.onmessage(a);
     document.body.innerHTML = JSON.stringify(jsynchronous());

@@ -363,11 +363,13 @@ function jsynchronousSetup() {
       }
     }
   }
-  function addSynchronizedVariableMethods(details) {
+  function addSynchronizedVariableMethods(details, targetVariable) {
+    // targetVariable will be details.variable if it's synced. Otherwise it should be a stand-in variable
+
     details.changeEvents = [];
     details.setEvents = [];
     details.delEvents = [];
-    details.variable.$on = function (event, firstArg, secondArg, thirdArg) {
+    targetVariable.variable.$on = function (event, firstArg, secondArg, thirdArg) {
       var props;
       var options;
       var callback;
@@ -449,7 +451,8 @@ function jsynchronousSetup() {
     var propsValues = ancestryTree[currentHash];
 
     if (currentHash === targetHash) {
-      return {targetProp: targetValue};
+      props[targetProp] = targetValue;
+      return props;
     }
 
     if (hashesSeen === undefined) hashesSeen = [currentHash];
@@ -470,10 +473,12 @@ function jsynchronousSetup() {
   function linkParent(parentDetails, childDetails, prop) {
     parentDetails.linked[prop] = childDetails;
 
-    if (childDetails.parents[parentDetails.hash] === undefined) {
-      childDetails.parents[parentDetails.hash] = [prop];
-    } else if (childDetails.parents[parentHash].indexOf(prop) === -1) {
-      childDetails.parents[parentDetails.hash].push(prop);
+    var pHash = parentDetails.hash
+
+    if (childDetails.parents[pHash] === undefined) {
+      childDetails.parents[pHash] = [prop];
+    } else if (childDetails.parents[pHash].indexOf(prop) === -1) {
+      childDetails.parents[pHash].push(prop);
     }
   }
   function unlinkParent(parentDetails, prop) {

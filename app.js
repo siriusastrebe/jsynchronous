@@ -21,13 +21,38 @@ jsynchronous.send = (websocket, data) => {
   console.log('☐', data.length);
 }
 
-const nested = {a1: {b1: {c1: {d1: true}}}};
-const gameState = jsynchronous(nested);
+const arr = [[0]]
+arr.push(arr[0]);
+arr.push(arr[0]);
+arr.push(arr[0]);
 
+const $ynced = jsynchronous(arr);
 setInterval(() => {
-  const n = gameState.length;
-  gameState.a1.b1.c1.d1 = !gameState.a1.b1.c1.d1;
+  $ynced.push($ynced[0]);
+  $ynced[0][0] = Math.random();
 }, 5000);
+
+
+// Express
+const server = app.listen(port, () => {
+  console.log(`Example app listening at http://localhost:${port}`);
+})
+
+// Socket.io
+const { Server } = require("socket.io");
+const io = new Server(server);
+
+io.on('connection', (socket) => {
+  socket.emit('hello', {contents: 'world'});
+  $ynced.$ync(socket);  
+
+  socket.on('disconnect', function() {
+    $ynced.$unsync(socket);
+  });
+});
+
+
+
 
 
 
@@ -211,22 +236,6 @@ a.circular[0][0][0] = a;
 //  gameState['circular'] = a;
 //}, 15000);
 
-
-
-
-// Express
-const server = app.listen(port, () => {
-  console.log(`Example app listening at http://localhost:${port}`);
-})
-
-// Socket.io
-const { Server } = require("socket.io");
-const io = new Server(server);
-
-io.on('connection', (socket) => {
-  socket.emit('hello', {contents: 'world'});
-  gameState.$ync(socket);  
-});
 
 
 
