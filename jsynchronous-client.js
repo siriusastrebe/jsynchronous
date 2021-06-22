@@ -74,6 +74,7 @@ function jsynchronousSetup() {
       counter: counter,  // Counter will always be 1 above the last packet
       objects: {},  // key-> value corresponds to details.hash->details
       root: undefined,
+      events: [],
       staging: {
         references: []
       }
@@ -105,12 +106,12 @@ function jsynchronousSetup() {
 
   function standInVariable(name, type) {
     if (standIns[name]) {
-      return standIns[name].root;
+      return standIns[name].variable;
     } else {
       standIns[name] = jsyncObject(undefined, -1);
-      standIns[name].root = newCollection(type);
-      // TODO: Assign methods to variable
-      return standIns[name].root;
+      standIns[name].variable = newCollection(type);
+      addSynchronizedVariableMethods(standIns[name], standIns[name].variable);
+      return standIns[name].variable;
     }
   }
 
@@ -122,7 +123,7 @@ function jsynchronousSetup() {
       if (standIns[name]) {
         standIn = standIns[name];
       }
-      var standInType = detailedType(standIn.root)
+      var standInType = detailedType(standIn.variable)
 
       if (standIn && standInType !== type) {
         standIn = undefined;
@@ -144,9 +145,10 @@ function jsynchronousSetup() {
     }
 
     if (standIn) {
-      details.variable = standIn.root;
+      details.variable = standIn.variable;
     } else {
       details.variable = newCollection(type);
+      addSynchronizedVariableMethods(jsync, details.variable);
     }
 
     jsync.objects[hash] = details;
@@ -189,46 +191,77 @@ function jsynchronousSetup() {
       throw "JSynchronous error - Server provided changes for a variable not registered with this client with the name " + name;
     }
 
+    // Clear previous queued triggers
+    jsync.queuedTriggers = []
+
     if (minCounter !== jsync.counter) {
       throw "Jsynchronous error - Updates skipped. Expected " + jsync.counter + " got " + minCounter + ". This means your TCP/IP connection was reset in your transport";
     } else {
       jsync.counter = maxCounter+1;
     }
 
-    for (let i=0; i<changes.length; i++) {
+    var changesTriggered = [];
+    var recursiveEvents = [];
+
+    for (var i=0; i<changes.length; i++) {
       var change = changes[i];
       var op = OP_ENCODINGS[change[0]];
       var hash = change[1];
+      var prop;
+      var details;
+     
+      if (op === 'set' || op === 'delete' || op === 'end') {
+        details = jsync.objects[hash];
+        if (details === undefined) {
+          throw "Jsynchronous error - Change for an object hash " + hash + " that is not registered with the synchronized variable by name '" + jsync.name + "'";
+        }
+      }
 
       if (op === 'set') {
         var prop = change[2];
         var newDetails = change[3];
         var oldDetails = change[4];
-        set(hash, prop, newDetails, oldDetails, jsync);
-      } else if (op === 'del') {
+        pt = set(details, prop, newDetails, oldDetails, jsync);
+      } else if (op === 'delete') {
         var prop = change[2];        
         var oldDetails =  change[4];
-        del(hash, prop, oldDetails, jsync);
+        pt = del(details, prop, oldDetails, jsync);
       } else if (op === 'new') {
         var type = change[2];
         var each = change[3];
         createSyncedVariable(hash, TYPE_ENCODINGS[type], each, jsync); 
       } else if (op === 'end') {
-        endObject(hash, jsync);
+        endObject(details, jsync);
       } else {
-        throw "Jsynchronous error - Unidentified operation coming from server.";
+        throw "Jsynchronous error - Unidentified operation coming from server: " + op;
       }
     }
 
     resolveReferences(jsync);
+
+    triggerEvents(jsync);
+  }
+  function matchesPropertyTree(propertiesList, pt, recursive) {
+    var currentProp = pt;
+
+    for (let i=0; i<propertiesList.length; i++) {
+      var expected = propertiesList[i];
+      var matching = currentProp[expected];
+      if (matching) {
+        currentProp = matching;
+      } else {
+        return false;
+      }
+    }
+    if (recursive || currentIndex === propertiesList.length) {
+      return true; 
+    } else {
+      return false;
+    }
   }
 
-  function set(hash, prop, newDetails, oldDetails, jsync) {
-    var details = jsync.objects[hash];
-    if (details === undefined) {
-      throw "Jsynchronous error - Set for an object hash " + hash + " that is not registered with the synchronized variable by name " + jsync.name;
-    }
 
+  function set(details, prop, newDetails, oldDetails, jsync) {
     var object = details.variable;
     var type = TYPE_ENCODINGS[newDetails[0]];
     var value;
@@ -245,7 +278,7 @@ function jsynchronousSetup() {
     var oldValue;
 
     if (isPrimitive(oldType)) {
-      oldValuevalue = resolvePrimitive(oldType, oldDetails[1]);
+      oldValue = resolvePrimitive(oldType, oldDetails[1]);
     } else {
       var childDetails = resolveSyncedVariable(oldDetails[1], jsync);
       oldValue = childDetails.variable;
@@ -253,28 +286,26 @@ function jsynchronousSetup() {
 
     object[prop] = value;
 
-    triggerEvents('set', details, prop, value, oldValue, jsync);
+    queueEventTriggers('set', details, prop, value, oldValue, jsync);
   }
-  function del(hash, prop, jsync) {
-    var details = jsync.objects[hash];
-    if (details === undefined) {
-      throw "Jsynchronous error - Prop deletion for an object hash " + hash + " that is not registered with the synchronized variable by name " + jsync.name;
+  function del(details, prop, oldDetails, jsync) {
+    var object = details.variable;
+    var oldType = TYPE_ENCODINGS[oldDetails[0]];
+    var oldValue;
+
+    if (isPrimitive(oldType)) {
+      oldValue = resolvePrimitive(oldType, oldDetails[1]);
+    } else {
+      var childDetails = resolveSyncedVariable(oldDetails[1], jsync);
+      oldValue = childDetails.variable;
     }
 
-    //unlinkParent(details, prop);
-
-    var object = details.variable;
-
+    unlinkParent(details, prop);
     delete object[prop];
 
-    triggerEvents('delete', details, prop, undefined, oldValue, jsync);
+    queueEventTriggers('delete', details, prop, undefined, oldValue, jsync);
   }
-  function endObject(hash, jsync) {
-    var details = jsync.objects[hash];
-    if (details === undefined) {
-      throw "Jsynchronous error - End for an object hash " + hash + " that is not registered with the synchronized variable by name " + jsync.name;
-    }
-
+  function endObject(details, jsync) {
     // Memento mori
     delete jsync.objects[hash];
   }
@@ -364,46 +395,94 @@ function jsynchronousSetup() {
       }
     }
   }
-  function addSynchronizedVariableMethods(details, targetVariable) {
+
+  function addSynchronizedVariableMethods(jsync, targetVariable) {
     // targetVariable will be details.variable if it's synced. Otherwise it should be a stand-in variable
+    Object.defineProperty(targetVariable, '$on', { value: 
+      function $on (event, firstArg, secondArg, thirdArg) {
+        var props;
+        var options;
+        var callback;
 
-    details.events = [];
-    targetVariable.variable.$on = function (event, firstArg, secondArg, thirdArg) {
-      var props;
-      var options;
-      var callback;
-
-      for (let i=0; i<3; i++) {
-        var arg = [firstArg, secondArg, thirdArg][i];
-        var argType = detailedType(arg);
-        if (argType === 'array') {
-          props = arg;
-        } else if (argType === 'object') {
-          options = arg;
-        } else if (argType === 'function') {
-          callback = arg;
+        for (let i=0; i<3; i++) {
+          var arg = [firstArg, secondArg, thirdArg][i];
+          var argType = detailedType(arg);
+          if (argType === 'array') {
+            props = arg;
+          } else if (argType === 'object') {
+            options = arg;
+          } else if (argType === 'function') {
+            callback = arg;
+          }
         }
-      }
 
-      if (callback === undefined) {
-        throw ".$on('" + event + "') needs to be provided a callback";
-      }
+        if (callback === undefined) {
+          throw ".$on('" + event + "') needs to be provided a callback";
+        }
 
-      var e = {props: props, options: options, callback: callback};
-      if (event === 'change') {
-        changeEvents.push(e)
-      } else if (event === 'set') {
-        setEvents.push(e);
-      } else if (event === 'del') {
-        delEvents.push(e);
+        var e = {event: event, props: props, options: options, callback: callback};
+        jsync.events.push(e);
       }
+    });
+  }
+
+  function queueEventTriggers(event, details, prop, value, oldValue, jsync) {
+    if (jsync.events.length > 0) {
+      var ancestryTree = findAncestryTree(jsync, details)
+      var propertyTree = findPropertyTree(ancestryTree, jsync.root.hash, details.hash, prop, event);
+
+      jsync.queuedTriggers.push({
+        event: event, 
+        details: details,
+        prop: prop,
+        value: value,
+        oldValue: oldValue,
+        pt: propertyTree
+      });
     }
   }
 
-  function triggerEvents(event, details, prop, value, oldValue, jsync) {
-    var ancestryTree = findAncestryTree(jsync, details)
-    var propertyTree = findPropertyTree(ancestryTree, jsync.root.hash, details.hash, prop, event);
-    console.log(event, propertyTree);
+  function triggerEvents(jsync) {
+    var changesTriggered = [];
+
+    for (var i=0; i<jsync.queuedTriggers.length; i++) {
+      var t = jsync.queuedTriggers[i];
+      var props = t.props;
+      var options  = t.options;
+      var callback = t.callback;
+      var details = t.details;
+      var pt = t.pt;
+
+      for (var j=0; j<jsync.events.length; j++) {
+        var e = jsync.events[j];
+
+        if (e.event === t.event || e.event === 'changes') {
+          var propertiesList = e.props || [];
+          var recursive = (e.event === 'changes' || (e.options && e.options.recursive === true));
+
+          if (matchesPropertyTree(propertiesList, pt, recursive)) {
+            if (e.event === 'changes') {
+              if (changesTriggered.indexOf(e) === -1) changesTriggered.push(e);
+            } else {
+              callback(details.variable, prop, value, oldValue, propertyTree);
+            }
+          }
+        }
+      }
+    }
+
+    for (var i=0; i<changesTriggered.length; i++) {
+      var variable = jsync.root.variable;
+      var e = changesTriggered[i];
+
+      if (e.props) {
+        // Provide the callback with variable relative to the properties they listed
+        for (let j=0; j<e.props.length; j++) {
+          variable = variable[e.props[j]];
+        }
+      }
+      changesTriggered[i].callback(variable);
+    }
   }
 
   function findAncestryTree(jsync, details, from, prop, visited) {
@@ -434,7 +513,7 @@ function jsynchronousSetup() {
           throw "Jsynchronous sanity error - finding ancestry tree encountered a parent that is not present in the synchronized objects list.";
         }
 
-        for (let i=0; i<properties.length; i++) {
+        for (var i=0; i<properties.length; i++) {
           var property = properties[i];
           findAncestryTree(jsync, parent, details, property, visited);
         }
@@ -454,7 +533,9 @@ function jsynchronousSetup() {
       return props;
     }
 
-    if (hashesSeen === undefined) hashesSeen = [currentHash];
+    if (hashesSeen === undefined) {
+      hashesSeen = [currentHash];
+    }
 
     for (var prop in propsValues) {
       var childHash = propsValues[prop];

@@ -4,9 +4,25 @@
 <script>
   const socket = io();
 
-  var $ynced = jsynchronous('', 'array');
+  var $ynced = jsynchronous('', 'object');
+
+  $ynced.$on('changes', (a, b, c, d, e, f) => {
+    console.log('[] triggered', a);
+  });
+
+  $ynced.$on('changes', ['b'], (variable) => {
+    console.log("['b'] triggered", variable);
+  });
+
+  $ynced.$on('changes', ['b', 'bo'], (variable) => {
+    console.log("['b', 'bo'] triggered", variable);
+  });
+
+  $ynced.$on('changes', ['a'], (variable) => {
+    console.log("['a'] triggered", variable);
+  });
+
   socket.on('msg', function (a, b, c) {
-    console.log($ynced);
     jsynchronous.onmessage(a);
     document.body.innerHTML = JSON.stringify(jsynchronous());
   });

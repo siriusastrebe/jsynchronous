@@ -216,13 +216,13 @@ class SyncedObject {
         const value = obj[prop]
         const type = detailedType(value);
         if (!isPrimitive(type)) {
-          let syncedObject = value[jsynchronous.reserved_property];
+          let deadManWalking = value[jsynchronous.reserved_property];
           // TODO: comment these throws out. They aren't errors, they're sanity checks
           if (syncedObject === undefined) {
             throw `Jsynchronous sanity error - previously referenced variable was not being tracked.`
           }
 
-          syncedObject.unlinkParent(obj[jsynchronous.reserved_property], prop);
+          deadManWalking.unlinkParent(syncedObject, prop);
         }
 
         const operation = 'delete';

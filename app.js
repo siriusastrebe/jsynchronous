@@ -21,16 +21,26 @@ jsynchronous.send = (websocket, data) => {
   console.log('☐', data.length);
 }
 
-const arr = [[0]]
-arr.push(arr[0]);
-arr.push(arr[0]);
-arr.push(arr[0]);
-
-const $ynced = jsynchronous(arr);
+// Basic deletion
+const obj = {a: 'a', b: {z: 'z'}}
+const $ynced = jsynchronous(obj);
 setInterval(() => {
-  $ynced.push($ynced[0]);
-  $ynced[0][0] = Math.random();
-}, 5000);
+  const z = $ynced['b'];
+//  delete $ynced['b']
+  z.bo = Math.random();
+}, 6000);
+
+
+//const arr = [[0]]
+//arr.push(arr[0]);
+//arr.push(arr[0]);
+//arr.push(arr[0]);
+//
+//const $ynced = jsynchronous(arr);
+//setInterval(() => {
+//  $ynced.push($ynced[0]);
+//  $ynced[0][0] = Math.random();
+//}, 5000);
 
 
 // Express
