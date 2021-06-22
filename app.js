@@ -27,7 +27,9 @@ const $ynced = jsynchronous(obj);
 setInterval(() => {
   const z = $ynced['b'];
 //  delete $ynced['b']
-  z.bo = Math.random();
+//  z.bo = Math.random();
+//  $ynced.b = 'b';
+  $ynced.three = Math.random();
 }, 6000);
 
 
