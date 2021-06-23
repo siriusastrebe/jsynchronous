@@ -313,15 +313,8 @@ function jsynchronousSetup() {
   }
   function del(details, prop, oldDetails, jsync) {
     var object = details.variable;
-    var oldType = TYPE_ENCODINGS[oldDetails[0]];
-    var oldValue;
-
-    if (isPrimitive(oldType)) {
-      oldValue = resolvePrimitive(oldType, oldDetails[1]);
-    } else {
-      var childDetails = resolveSyncedVariable(oldDetails[1], jsync);
-      oldValue = childDetails.variable;
-    }
+    //var oldType = TYPE_ENCODINGS[oldDetails[0]];
+    var oldValue = details.variable[prop];
 
     unlinkParent(details, prop);
     delete object[prop];
@@ -565,7 +558,7 @@ function jsynchronousSetup() {
   function unlinkParent(parentDetails, prop) {
     var childDetails = parentDetails.linked[prop];
 
-    var properties = childDetails.parents[parentHash];
+    var properties = childDetails.parents[parentDetails.hash];
     if (properties) {
       var index = properties.indexOf(prop);
       if (index !== -1) {
@@ -576,7 +569,7 @@ function jsynchronousSetup() {
     delete parentDetails.linked[prop];
 
     if (properties.length === 0) {
-      delete this.parents[parentHash];
+      delete childDetails.parents[parentDetails.hash];
     }
 
     // We don't have to garbage collect the child, that should be triggered by the 'end' operation coming from the server

@@ -43,9 +43,14 @@ wss.on('connection', function connection(ws) {
 
 // Relay the data
 $erved.$on('changes', () => {
-  console.log(util.inspect($erved, {depth: 1, colors: true}));
+  console.log(util.inspect($erved, {depth: 2, colors: true}));
   for (let prop in $erved) {
     $relay[prop] = $erved[prop];
+  }
+  for (let prop in $relay) {
+    if ($erved.hasOwnProperty(prop) === false) {
+      delete $relay[prop]
+    }
   }
 });
 

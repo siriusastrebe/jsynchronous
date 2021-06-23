@@ -46,10 +46,16 @@ $relay.$on('changes', () => {
 
 // Start the test
 async function startTest() {
-  await wait(2000);
+  await wait(1000);
   await test0();
   await test1();
   await test2();
+  await test3();
+  await test4();
+  await test5();
+  await test6();
+  await test7();
+  await test8();
 
   console.log('All tests passed!');
 }
@@ -82,19 +88,62 @@ async function test0() {
   if (deepComparison([0, 1, 2, 3], [0, 1, 2, '3'])) throw `Test 0 failed - Deep comparison failed check 9`
   if (deepComparison([[[]]], [[[0]]]))       throw `Test 0 failed - Deep comparison failed check 10`
 
+  const circular5 = {x: {y: {z: undefined}}}
+  const noncircular = {x: {y: {z: undefined}}}
+  circular5.x.y.z = circular5.x;
+  if (deepComparison(circular5, noncircular))       throw `Test 0 failed - Deep comparison failed check 10`
+
   return true;
 }
 async function test1() {
-  console.log('Test 1 - assignment of property on root');
+  console.log('Test 1 - Assignment of property on root');
   $erved.test = 1;
-  return await matchOrThrow($erved, $relay, 1);
+  return await matchOrThrow($erved, $relay);
 }
 
 async function test2() {
-  console.log('Test 2 - reassignment of property on root');
-  $erved.test = 2;
-  return await matchOrThrow($erved, $relay, 1);
+  console.log('Test 2 - Reassignment of property on root');
+  $erved.test = 'in progress';
+  return await matchOrThrow($erved, $relay);
 }
+
+async function test3() {
+  console.log('Test 3 - Assignment of a object');
+  $erved.bball = {jordan: 'space jam', number: 3};
+  return await matchOrThrow($erved, $relay);
+}
+
+async function test4() {
+  console.log('Test 4 - Assignment of an array');
+  $erved.numbers = [1.1, '2', 'three', 4, 5, 6]
+  return await matchOrThrow($erved, $relay);
+}
+
+async function test5() {
+  console.log('Test 5 - Pushing a floating point number onto array');
+  $erved.numbers.push(0.1234567890123456789);
+  return await matchOrThrow($erved, $relay);
+}
+
+async function test6() {
+  console.log('Test 6 - Assignment of a nested array');
+  $erved.nested = [[0]];
+  return await matchOrThrow($erved, $relay);
+}
+
+async function test7() {
+  console.log('Test 7 - Deleting a property');
+  delete $erved['numbers']
+  return await matchOrThrow($erved, $relay);
+}
+
+async function test8() {
+  console.log('Test 8 - Deletion of multiple properties');
+  delete $erved['nested'];
+  delete $erved['bball'];
+  return await matchOrThrow($erved, $relay);
+}
+
 
 // ----------------------------------------------------------------
 // Helper functions
@@ -111,8 +160,9 @@ async function matchOrThrow(left, right, testNumber) {
   let results =  await match($erved, $relay);
   if (results === false) {
     console.log(util.inspect(left, {depth: 1, colors: true}));
+    console.log('----------------------------------------------------------------');
     console.log(util.inspect(right, {depth: 1, colors: true}));
-    throw `Test ${testNumber} failed - No match`;
+    throw `Failed to find a match`;
   } else {
     return true;
   }
