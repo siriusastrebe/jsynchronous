@@ -4,7 +4,7 @@
 <script>
   const socket = io();
 
-  var $ynced = jsynchronous('', 'object');
+  var $ynced = jsynchronous('', 'array');
 
 //  $ynced.$on('changes', (a, b, c, d, e, f) => {
 //    console.log('[] triggered', a);
@@ -22,31 +22,42 @@
 //    console.log("['a'] triggered", variable);
 //  });
 
-  $ynced.$on('set', ['b', 'bo'], (value, oldValue, pt) => {
-    console.log("set ['b', 'bo'] triggered", value, oldValue, pt);
-  });
+//  $ynced.$on('set', ['b', 'bo'], (value, oldValue, pt) => {
+//    console.log("set ['b', 'bo'] triggered", value, oldValue, pt);
+//  });
+//
+//
+//  $ynced.$on('set', ['b', '*'], (value, oldValue, pt) => {
+//    console.log("set ['b', '*'] triggered", value, oldValue, pt);
+//  });
+//
+//  $ynced.$on('set', ['b'], (value, oldValue, pt) => {
+//    console.log("set ['b'] triggered", value, oldValue, pt);
+//  });
 
 
-  $ynced.$on('set', ['b', '*'], (value, oldValue, pt) => {
-    console.log("set ['b', '*'] triggered", value, oldValue, pt);
-  });
+//  $ynced.$on('changes', (a) => {
+//    console.log('changes triggered', a);
+//  });
+//
+//  $ynced.$on('set', ['*'], (value, oldValue, pt) => {
+//    console.log("set ['*'] triggered", value, oldValue, pt);
+//  });
+//
+//  $ynced.$on('set', ['*'], {recursive: true}, (value, oldValue, pt) => {
+//    console.log("set ['*'] recursive triggered", value, oldValue, pt);
+//  });
 
-  $ynced.$on('set', ['b'], (value, oldValue, pt) => {
-    console.log("set ['b'] triggered", value, oldValue, pt);
-  });
-
-  $ynced.$on('set', ['*'], (value, oldValue, pt) => {
-    console.log("set ['*'] triggered", value, oldValue, pt);
-  });
 
 
-  $ynced.$on('set', (value, oldValue, pt) => {
-    console.log("set triggered", value, oldValue, pt);
-  });
+//  $ynced.$on('set', (value, oldValue, pt) => {
+//    console.log("set triggered", value, oldValue, pt);
+//  });
 
   socket.on('msg', function (a, b, c) {
     jsynchronous.onmessage(a);
-    document.body.innerHTML = JSON.stringify(jsynchronous());
+    console.log(jsynchronous());
+//    document.body.innerHTML = JSON.stringify(jsynchronous());
   });
 </script>
 <body>

@@ -21,16 +21,71 @@ jsynchronous.send = (websocket, data) => {
   console.log('☐', data.length);
 }
 
-// Basic deletion
-const obj = {a: 'a', b: {z: 'z'}}
-const $ynced = jsynchronous(obj);
+
+
+
+
+//const arr = [];
+//arr.push('chars');
+//arr.push('charizards');
+//arr[5] = 7;
+//arr[6] = {a: 'b'};
+//
+//
+//const struct = {
+//  arr: [],
+//  childrenStructs: {},
+//}
+//
+const arr = [
+  {name: 'duck'},
+  0,
+  7,
+  "what's up",
+  {name: 'strawberry'},
+  {name: 'beef'}
+]
+
+//arr.forEach((a) => {
+//  console.log(a.name);
+//});
+//
+//arr.map(()
+//
+//arr.filter(() => {
+//});
+//
+
+const $ynced = jsynchronous(arr);
+
+//var reference = $ynced[6]
+
 setInterval(() => {
-  const z = $ynced['b'];
+//  delete $ynced[6]
+//  reference.a = 'z';
+//  reference.b = 'wer';
+//  reference.z = 'zzzz';
+//
+//  $ynced[6] = reference;
+}, 5000);
+
+
+
+
+
+// Basic deletion
+//const obj = {a: 'a', b: {z: 'z'}}
+//const $ynced = jsynchronous(obj);
+//setInterval(() => {
+//  const z = $ynced['b'];
 //  delete $ynced['b']
 //  z.bo = Math.random();
 //  $ynced.b = 'b';
-  $ynced.three = Math.random();
-}, 6000);
+//  for (let i=0; i<100; i++) {
+//  $ynced.three = Math.random();
+//  $ynced.k = Math.random();
+//  }
+//}, 6000);
 
 
 //const arr = [[0]]
