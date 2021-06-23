@@ -14,10 +14,17 @@ const $relay = jsynclient(null, 'object');
 // Jsync server setup
 const wss = new WebSocket.Server({ port: 8080 });
 
+let communication = 0;
+
 wss.on('connection', function connection(ws) {
-  console.log('Server->relay communcation established');
   ws.on('message', function incoming(message) {});
   $erved.$ync(ws);
+
+  console.log('Server->relay communcation established');
+  communication += 1;
+  if (communication >= 2) {
+    startTest();
+  }
 });
 
 // Jsync relay client setup
@@ -25,7 +32,11 @@ async function connectRelay(backoff) {
   const ws = new WebSocket('ws://localhost:8081');
   ws.on('open', function open() {
     console.log('relay->Server communication established');
-    startTest();
+
+    communication += 1;
+    if (communication >= 2) {
+      startTest();
+    }
   });
   
   ws.on('message', function incoming(data) {
@@ -48,23 +59,144 @@ $relay.$on('changes', () => {
 async function startTest() {
   await wait(1000);
   await test0();
-  await test1();
-  await test2();
-  await test3();
-  await test4();
-  await test5();
-  await test6();
-  await test7();
-  await test8();
+  
+
+  await test('Assignment of property on root');
+
+
+  await test('Reassignment of property on root');
+
+
+  $erved.bball = {jordan: 'space jam'};
+  await test('Assignment of a object');
+
+
+  $erved.bball['bugs bunny'] = "What's up doc?";
+  await test('Assignment of property on object with whitespaces in key');
+
+
+  $erved.bball['¢åπ'] = "unicode";
+  await test('Assignment of a key with unicode characters');
+
+
+  $erved.bball['emojis'] = "🔫😍🙈❄↕⚡⚠⚽🌍🐓";
+  await test('Assignment of unicode characters as values');
+
+
+  $erved.bball['∞§π'] = "§ß∫ºπΩø™£∆å´∑£¢∞¡§¶ç√˜µ≤≥…";
+  await test('Assignment of a key and values with unicode characters');
+
+
+  $erved.bball['🐊'] = "Crock";
+  await test('Assignment of key to a unicode character');
+
+
+  $erved.bball['🐊'] = "Aligator?";
+  await test('Reassignment of unicode character key');
+
+  
+  $erved.bball = {};
+  await test('Reassignment of an object');
+
+
+  $erved.bball['emojis'] = "🔫😍🙈❄↕⚡⚠⚽🌍🐓";
+  await test('Assignment of a property on new object');
+
+
+  $erved.bball['emojis'] += "🔫😍🙈❄↕⚡⚠⚽🌍🐓";
+  await test('Extending a unicode string');
+
+
+  $erved.bball['numbers'] = 0;
+  await test('Assignment of an integer');
+
+
+  $erved.bball['numbers'] = 0.12345678790;
+  await test('Assignment of a floating point number');
+
+
+  $erved.bball['numbers'] = 5.67;
+  await test('Assignment of a floating point number with fixed precision');
+
+
+  $erved.bball['numbers'] = 1.1;
+  $erved.bball['numbers'] = 2.2;
+  $erved.bball['numbers'] = 3.3;
+  $erved.bball['numbers'] = 4.4;
+  $erved.bball['numbers'] = 5.5;
+  await test('Assignment of numbers in quick succession');
+
+
+  delete $erved.bball
+  await test('Deletion of object on root object');
+
 
   console.log('All tests passed!');
 }
+
+
+let levelCounter = 0;
+async function test(text, left, right) {
+  levelCounter++;
+  $erved.test = levelCounter;
+
+  console.log(`Test ${levelCounter} - ${text}`);
+
+  if (left === undefined) {
+    left = $erved;
+  }
+
+  if (right === undefined) {
+    right = $relay;
+  }
+
+  return await matchOrThrow(left, right);
+}
+
+
+
+
+//  $erved.numbers = [1.1, '2', 'three', 4, 5, 6]
+//  await test('Assignment of an array');
+//
+//  await test('Pushing a floating point number onto array');
+//
+//  await test('Assignment of a nested array');
+//
+//  await test('Deleting a property');
+//
+//  await test('Deletion of multiple properties');
+//
+//  $erved.numbers.push(0.1234567890123456789);
+//  return await matchOrThrow($erved, $relay);
+
+//async function test6() {
+//  console.log('Test 6 - Assignment of a nested array');
+//  $erved.nested = [[0]];
+//  return await matchOrThrow($erved, $relay);
+//}
+//
+//async function test7() {
+//  console.log('Test 7 - Deleting a property');
+//  delete $erved['numbers']
+//  return await matchOrThrow($erved, $relay);
+//}
+//
+//async function test8() {
+//  console.log('Test 8 - Deletion of multiple properties');
+//  delete $erved['nested'];
+//  delete $erved['bball'];
+//
+//  console.log('All tests passed!');
+//}
 
 // ----------------------------------------------------------------
 // Tests
 // ----------------------------------------------------------------
 async function test0() {
-  console.log('Test 0 - Testing deep comparison on known values');
+  console.log('Test 0 - Testing deepComparison function on known values');
+
+  // Matching tests
   if (!deepComparison({a: 'a'}, {a: 'a'}))     throw `Test 0 failed - Deep comparison failed check 0`;
   if (!deepComparison([], []))                 throw `Test 0 failed - Deep comparison failed check 1`;
   if (!deepComparison([[]], [[]]))             throw `Test 0 failed - Deep comparison failed check 2`;
@@ -82,6 +214,8 @@ async function test0() {
   circular4.a.b.c = circular4;
   if (!deepComparison(circular3, circular4)) throw `Test 0 failed - Deep comparison failed check 5`;
 
+
+  // Not matching tests
   if (deepComparison({a: 'b'}, {a: 'c'}))    throw `Test 0 failed - Deep comparison failed check 6`
   if (deepComparison({a: {b: {c: 'z'}}}, {a: {b: {c: 'y'}}})) throw `Test 0 failed - Deep comparison failed check 7`
   if (deepComparison([0, 1, 2, 3], [0, 1, 2])) throw `Test 0 failed - Deep comparison failed check 8`
@@ -94,54 +228,6 @@ async function test0() {
   if (deepComparison(circular5, noncircular))       throw `Test 0 failed - Deep comparison failed check 10`
 
   return true;
-}
-async function test1() {
-  console.log('Test 1 - Assignment of property on root');
-  $erved.test = 1;
-  return await matchOrThrow($erved, $relay);
-}
-
-async function test2() {
-  console.log('Test 2 - Reassignment of property on root');
-  $erved.test = 'in progress';
-  return await matchOrThrow($erved, $relay);
-}
-
-async function test3() {
-  console.log('Test 3 - Assignment of a object');
-  $erved.bball = {jordan: 'space jam', number: 3};
-  return await matchOrThrow($erved, $relay);
-}
-
-async function test4() {
-  console.log('Test 4 - Assignment of an array');
-  $erved.numbers = [1.1, '2', 'three', 4, 5, 6]
-  return await matchOrThrow($erved, $relay);
-}
-
-async function test5() {
-  console.log('Test 5 - Pushing a floating point number onto array');
-  $erved.numbers.push(0.1234567890123456789);
-  return await matchOrThrow($erved, $relay);
-}
-
-async function test6() {
-  console.log('Test 6 - Assignment of a nested array');
-  $erved.nested = [[0]];
-  return await matchOrThrow($erved, $relay);
-}
-
-async function test7() {
-  console.log('Test 7 - Deleting a property');
-  delete $erved['numbers']
-  return await matchOrThrow($erved, $relay);
-}
-
-async function test8() {
-  console.log('Test 8 - Deletion of multiple properties');
-  delete $erved['nested'];
-  delete $erved['bball'];
-  return await matchOrThrow($erved, $relay);
 }
 
 

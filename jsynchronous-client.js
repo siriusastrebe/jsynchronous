@@ -255,35 +255,6 @@ function jsynchronousSetup() {
       triggerChangesEvent(jsync, props, changesTriggered[i].callback);
     }
   }
-  function matchesPropertyTree(propertiesList, pt, recursive) {
-    if (propertiesList === undefined || propertiesList.length === 0) {
-      if (pt === true || recursive) {
-        return true;
-      }
-    }
-
-    var expected = propertiesList[0];
-
-    if (expected === '*') {
-      var keys = Object.keys(pt);
-      for (let i=0; i<keys.length; i++) {
-        if (matchesPropertyTree(propertiesList.slice(1), pt[keys[i]], recursive)) {
-          return true;
-        }
-      }
-
-      return false;
-    } else {
-      var matching = pt[expected];
-      if (matching) {
-        return matchesPropertyTree(propertiesList.slice(1), matching, recursive);
-      } else {
-        return false;
-      }
-    }
-  }
-
-
   function set(details, prop, newDetails, oldDetails, jsync) {
     var object = details.variable;
     var type = TYPE_ENCODINGS[newDetails[0]];
@@ -309,7 +280,7 @@ function jsynchronousSetup() {
 
     object[prop] = value;
 
-    return triggerStatefulEvents('set', details, prop, value, oldValue, jsync);
+    return triggerStatefulEvents(details, prop, value, oldValue, jsync);
   }
   function del(details, prop, oldDetails, jsync) {
     var object = details.variable;
@@ -319,7 +290,7 @@ function jsynchronousSetup() {
     unlinkParent(details, prop);
     delete object[prop];
 
-    return triggerStatefulEvents('delete', details, prop, undefined, oldValue, jsync);
+    return triggerStatefulEvents(details, prop, undefined, oldValue, jsync);
   }
   function endObject(details, jsync) {
     // Memento mori
@@ -437,7 +408,7 @@ function jsynchronousSetup() {
         }
 
         var e = {event: event, props: props, options: options, callback: callback};
-        if (e.event === 'set' || e.event === 'delete') {
+        if (e.event === 'alter') {
           jsync.statefulEvents.push(e);
         } else if (e.event === 'changes') {
           jsync.changesEvents.push(e);
@@ -448,9 +419,9 @@ function jsynchronousSetup() {
     });
   }
 
-  function triggerStatefulEvents(event, details, prop, value, oldValue, jsync) {
+  function triggerStatefulEvents(details, prop, value, oldValue, jsync) {
     var ancestryTree = findAncestryTree(jsync, details)
-    var propertyTree = findPropertyTree(ancestryTree, jsync.root.hash, details.hash, prop, event);
+    var propertyTree = findPropertyTree(ancestryTree, jsync.root.hash, details.hash, prop);
 
     for (var j=0; j<jsync.statefulEvents.length; j++) {
       var e = jsync.statefulEvents[j];
@@ -460,7 +431,7 @@ function jsynchronousSetup() {
       var recursive = (options && options.recursive === true);
 
       if (matchesPropertyTree(props, propertyTree, recursive)) {
-        callback(value, oldValue, propertyTree);
+        callback(value, oldValue, propertyTree, details.variable);
       }
     }
 
@@ -516,8 +487,7 @@ function jsynchronousSetup() {
 
     return visited;
   }
-
-  function findPropertyTree(ancestryTree, currentHash, targetHash, targetProp, targetValue, hashesSeen) {
+  function findPropertyTree(ancestryTree, currentHash, targetHash, targetProp, hashesSeen) {
     // Walks down descendants of provided hash, creating a nested object with each of its keys as properties that lead to targetHash.
     var props = {}; 
     var propsValues = ancestryTree[currentHash];
@@ -537,12 +507,40 @@ function jsynchronousSetup() {
         var hashesSeenCopy = hashesSeen.slice();
         hashesSeenCopy.push(childHash);
 
-        props[prop] = findPropertyTree(ancestryTree, childHash, targetHash, targetProp, targetValue, hashesSeenCopy);
+        props[prop] = findPropertyTree(ancestryTree, childHash, targetHash, targetProp, hashesSeenCopy);
       }
     }
 
     return props;
   }
+  function matchesPropertyTree(propertiesList, pt, recursive) {
+    if (propertiesList === undefined || propertiesList.length === 0) {
+      if (pt === true || recursive) {
+        return true;
+      }
+    }
+
+    var expected = propertiesList[0];
+
+    if (expected === '*') {
+      var keys = Object.keys(pt);
+      for (let i=0; i<keys.length; i++) {
+        if (matchesPropertyTree(propertiesList.slice(1), pt[keys[i]], recursive)) {
+          return true;
+        }
+      }
+
+      return false;
+    } else {
+      var matching = pt[expected];
+      if (matching) {
+        return matchesPropertyTree(propertiesList.slice(1), matching, recursive);
+      } else {
+        return false;
+      }
+    }
+  }
+
 
   function linkParent(parentDetails, childDetails, prop) {
     parentDetails.linked[prop] = childDetails;
