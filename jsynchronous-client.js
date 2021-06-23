@@ -284,10 +284,13 @@ function jsynchronousSetup() {
   }
   function del(details, prop, oldDetails, jsync) {
     var object = details.variable;
-    //var oldType = TYPE_ENCODINGS[oldDetails[0]];
+    var oldType = TYPE_ENCODINGS[oldDetails[0]];
     var oldValue = details.variable[prop];
 
-    unlinkParent(details, prop);
+    if (!isPrimitive(oldType)) {
+      unlinkParent(details, prop);
+    }
+
     delete object[prop];
 
     return triggerStatefulEvents(details, prop, undefined, oldValue, jsync);
