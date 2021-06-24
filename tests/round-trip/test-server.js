@@ -54,7 +54,6 @@ $relay.$on('changes', () => {
   
 });
 
-
 // ----------------------------------------------------------------
 // Start the test
 // ----------------------------------------------------------------
@@ -219,6 +218,145 @@ async function startTest() {
   await test('Assigning an array property greater than the length of the array');
 
 
+  await wait(200);
+
+
+  levelCounter++;
+  console.log(`Test ${levelCounter} - Randomly generated data structures size 1`);
+  for (let i=0; i<20; i++) {
+    $erved.random = randomDataStructure(1);
+    await test();
+  }
+
+
+  levelCounter++;
+  let all = getAllObjects($erved.random);
+  console.log(`Test ${levelCounter} - Altering the generated data structure randomly`);
+  for (let i=0; i<100; i++) {
+    randomDataStructure(1, all);
+    await test();
+  }
+
+
+  levelCounter++;
+  all = getAllObjects($erved.random);
+  console.log(`Test ${levelCounter} - Altering the generated data structure randomly with multiple edits`);
+  for (let i=0; i<100; i++) {
+    randomDataStructure(10, all);
+    await test();
+  }
+
+
+  levelCounter++;
+  console.log(`Test ${levelCounter} - Randomly generated data structures size 2`);
+  for (let i=0; i<20; i++) {
+    $erved.random = randomDataStructure(2);
+    await test();
+  }
+
+
+  levelCounter++;
+  all = getAllObjects($erved.random);
+  console.log(`Test ${levelCounter} - Altering the generated data structure randomly with multiple edits`);
+  for (let i=0; i<100; i++) {
+    randomDataStructure(10, all);
+    await test();
+  }
+
+
+  levelCounter++;
+  console.log(`Test ${levelCounter} - Randomly generated data structures size 3`);
+  for (let i=0; i<20; i++) {
+    $erved.random = randomDataStructure(3);
+    await test();
+  }
+
+
+  levelCounter++;
+  all = getAllObjects($erved.random);
+  console.log(`Test ${levelCounter} - Altering the generated data structure randomly with multiple edits`);
+  for (let i=0; i<100; i++) {
+    randomDataStructure(10, all);
+    await test();
+  }
+
+
+  levelCounter++;
+  console.log(`Test ${levelCounter} - Randomly generated data structures size 5`);
+  for (let i=0; i<20; i++) {
+    $erved.random = randomDataStructure(5);
+    await test();
+  }
+
+
+  levelCounter++;
+  all = getAllObjects($erved.random);
+  console.log(`Test ${levelCounter} - Altering the generated data structure randomly`);
+  for (let i=0; i<100; i++) {
+    randomDataStructure(1, all);
+    await test();
+  }
+
+
+  levelCounter++;
+  console.log(`Test ${levelCounter} - Randomly generated data structures size 10`);
+  for (let i=0; i<20; i++) {
+    $erved.random = randomDataStructure(10);
+    await test();
+  }
+
+
+  levelCounter++;
+  all = getAllObjects($erved.random);
+  console.log(`Test ${levelCounter} - Altering the generated data structure randomly with multiple edits`);
+  for (let i=0; i<100; i++) {
+    randomDataStructure(10, all);
+    await test();
+  }
+
+
+
+  levelCounter++;
+  console.log(`Test ${levelCounter} - Randomly generated data structures size 100`);
+  for (let i=0; i<20; i++) {
+    $erved.random = randomDataStructure(100);
+    await test();
+  }
+
+
+  levelCounter++;
+  all = getAllObjects($erved.random);
+  console.log(`Test ${levelCounter} - Altering the generated data structure randomly with hundreds of edits`);
+  for (let i=0; i<100; i++) {
+    randomDataStructure(100, all);
+    await test();
+  }
+
+
+
+  levelCounter++;
+  console.log(`Test ${levelCounter} - Randomly generated data structures size 1000`);
+  for (let i=0; i<20; i++) {
+    $erved.random = randomDataStructure(1000);
+    await test();
+  }
+
+
+  levelCounter++;
+  all = getAllObjects($erved.random);
+  console.log(`Test ${levelCounter} - Altering the generated data structure randomly with thousands of edits`);
+  for (let i=0; i<10; i++) {
+    randomDataStructure(1000, all);
+    await test();
+  }
+
+
+  console.log(`Test ${levelCounter} - Cleaning up`);
+  delete $erved['random'];
+  $erved.test = 'passed';
+  await test();
+
+
 
   console.log('All tests passed!');
 }
@@ -229,10 +367,11 @@ async function startTest() {
 // ----------------------------------------------------------------
 let levelCounter = 0;
 async function test(text, left, right) {
-  levelCounter++;
-  $erved.test = levelCounter;
-
-  console.log(`Test ${levelCounter} - ${text}`);
+  if (text) {
+    levelCounter++;
+    $erved.test = levelCounter;
+    console.log(`Test ${levelCounter} - ${text}`);
+  }
 
   if (left === undefined) {
     left = $erved;
@@ -351,6 +490,75 @@ My heart is in the coffin there with Caesar,
 And I must pause till it come back to me.`
 }
 
+function randomWord() {
+  const wordsList = largeText2().split(/[\s,\n]+/);
+  return wordsList[Math.floor(Math.random() * wordsList.length)];
+}
+
+function randomDataStructure(size, existing, currentSize) {
+  // Generates a random self referrential data structure. Returns entire list, use [0] to access root
+  if (currentSize === undefined) {
+    currentSize = 0;
+  }
+
+  if (currentSize < size) {
+    if (existing === undefined) {
+      existing = [randomEnumerable()];
+    }
+
+    const random = existing[Math.floor(Math.random() * existing.length)];
+    const dice = Math.random();
+    if (Array.isArray(random)) {
+      if (dice < 0.4) {
+        random.push(randomWord());
+      } else if (dice < 0.8) {
+        const enumerable = randomEnumerable();
+        existing.push(enumerable);
+        random.push(enumerable);
+      } else {
+        const random2 = existing[Math.floor(Math.random() * existing.length)];
+        random.push(random2);
+      }
+    } else {
+      if (dice < 0.4) {
+        random[randomWord()] = randomWord();
+      } else if (dice < 0.8) {
+        const enumerable = randomEnumerable();
+        existing.push(enumerable);
+        random[randomWord()] = enumerable;
+      } else {
+        const random2 = existing[Math.floor(Math.random() * existing.length)];
+        random[randomWord()] = random2;
+      }
+    }
+
+    randomDataStructure(size, existing, currentSize+1);
+  }
+
+  return existing;
+}
+function randomEnumerable() {
+  if (Math.random() > 0.5) {
+    return []
+  } else {
+    return {}
+  }
+}
+function getAllObjects(node, visited) {
+  if (visited === undefined) visited = [];
+  if (visited.indexOf(node) === -1) {
+    visited.push(node)
+    for (let key in node) {
+      if (typeof node[key] === 'object') {
+        getAllObjects(node[key], visited);
+      }
+    }
+  }
+
+  return visited;
+}
+
+
 
 // ----------------------------------------------------------------
 // General Helper functions
@@ -378,10 +586,10 @@ async function matchOrThrow(left, right, testNumber) {
 async function match(left, right, counter) {
   if (deepComparison(left, right)) {
     return true;
-  } else if (counter > 100) {
+  } else if (counter > 1000) {
     return false;
   } else {
-    await wait(50);
+    await wait(10);
     return await match(left, right, counter === undefined ? 1: counter+1);
   }
 }
