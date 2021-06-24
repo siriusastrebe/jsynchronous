@@ -20,6 +20,8 @@ async function connectClient(backoff) {
     console.log('server->Relay communcation established');
   });
   ws.on('message', function incoming(data) {
+    console.log(data);
+    console.log('');
     jsynclient.onmessage(data);
   });
   ws.on('error', async function error(a, b, c) {
@@ -43,8 +45,8 @@ wss.on('connection', function connection(ws) {
 
 // Relay the data
 $erved.$on('changes', () => {
-  console.log(util.inspect($erved, {depth: null, colors: true}));
-  console.log('');
+//  console.log(util.inspect($erved, {depth: null, colors: true}));
+//  console.log('');
   for (let prop in $erved) {
     $relay[prop] = $erved[prop];
   }

@@ -117,7 +117,7 @@ function jsynchronousSetup() {
   }
 
   function createSyncedVariable(hash, type, each, jsync, isRoot) {
-    // This function expects resolveReferences() to be called after all syncedVariables in the payload are processed
+    // This function relies on resolveReferences() being called after all syncedVariables in the payload are processed
     var standIn;
     if (isRoot) {
       var name = jsync.name;
@@ -141,8 +141,6 @@ function jsynchronousSetup() {
     var details = {
       hash: hash,
       type: type,
-      linked: {},   // key->value corresponds to prop->childDetails
-      parents: {},  // key->value corresponds to parentHash->[properties]
       variable: undefined
     }
 
@@ -181,7 +179,7 @@ function jsynchronousSetup() {
     for (var j=0; j<references.length; j++) {
       var r = references[j];
       var childDetails = resolveSyncedVariable(r.hash, jsync);
-      linkParent(r.details, childDetails, r.prop);
+      //link(r.details, childDetails, r.prop);
       r.details.variable[r.prop] = childDetails.variable;
     }
     jsync.staging.references.length = 0;
@@ -192,9 +190,6 @@ function jsynchronousSetup() {
     if (jsync === undefined) {
       throw "JSynchronous error - Server provided changes for a variable not registered with this client with the name " + name;
     }
-
-    // Clear previous queued triggers
-    jsync.queuedTriggers = []
 
     if (minCounter !== jsync.counter) {
       throw "Jsynchronous error - Updates skipped. Expected " + jsync.counter + " got " + minCounter + ". This means your TCP/IP connection was reset in your transport";
@@ -223,11 +218,11 @@ function jsynchronousSetup() {
         var prop = change[2];
         var newDetails = change[3];
         var oldDetails = change[4];
-        pt = set(details, prop, newDetails, oldDetails, jsync);
+        set(details, prop, newDetails, oldDetails, jsync);
       } else if (op === 'delete') {
         var prop = change[2];        
         var oldDetails =  change[4];
-        pt = del(details, prop, oldDetails, jsync);
+        del(details, prop, oldDetails, jsync);
       } else if (op === 'new') {
         var type = change[2];
         var each = change[3];
@@ -241,7 +236,7 @@ function jsynchronousSetup() {
       if (op === 'set' || op === 'delete') {
         for (let j=0; j<jsync.changesEvents.length; j++) {
           var e = jsync.changesEvents[j];
-          if (changesTriggered.indexOf(e) === -1 &&  matchesPropertyTree(e.props, pt, true)) {
+          if (changesTriggered.indexOf(e) === -1) {  // Don't bother checking changes that are already triggered
             changesTriggered.push(e);
           }
         }
@@ -264,7 +259,7 @@ function jsynchronousSetup() {
       value = resolvePrimitive(type, newDetails[1]);
     } else {
       var childDetails = resolveSyncedVariable(newDetails[1], jsync);
-      linkParent(details, childDetails, prop);
+      //link(details, childDetails, prop, jsync);
       value = childDetails.variable;
     }
 
@@ -280,20 +275,23 @@ function jsynchronousSetup() {
 
     object[prop] = value;
 
-    return triggerStatefulEvents(details, prop, value, oldValue, jsync);
+    // return triggerStatefulEvents(details, prop, value, oldValue, jsync);
   }
   function del(details, prop, oldDetails, jsync) {
     var object = details.variable;
     var oldType = TYPE_ENCODINGS[oldDetails[0]];
-    var oldValue = details.variable[prop];
+    var oldValue = oldDetails[1];
 
-    if (!isPrimitive(oldType)) {
-      unlinkParent(details, prop);
+    if (isPrimitive(oldType)) {
+      oldValue = resolvePrimitive(oldType, oldDetails[1]);
+    } else {
+      var child = resolveSyncedVariable(oldDetails[1], jsync);
+      //unlink(details, child, prop);
     }
 
     delete object[prop];
 
-    return triggerStatefulEvents(details, prop, undefined, oldValue, jsync);
+    // return triggerStatefulEvents(details, prop, undefined, oldValue, jsync);
   }
   function endObject(details, jsync) {
     // Memento mori
@@ -423,27 +421,25 @@ function jsynchronousSetup() {
   }
 
   function triggerStatefulEvents(details, prop, value, oldValue, jsync) {
-    var ancestryTree = findAncestryTree(jsync, details)
-    var propertyTree = findPropertyTree(ancestryTree, jsync.root.hash, details.hash, prop);
-
     for (var j=0; j<jsync.statefulEvents.length; j++) {
       var e = jsync.statefulEvents[j];
-      var props = e.props || [];
+      var props = e.props;
       var options  = e.options;
       var callback = e.callback;
       var recursive = (options && options.recursive === true);
+
+      if (recursive && jsync.root.descendants[details.hash]) {
+        callback(value, oldValue, propertyTree, details.variable);
+      }
 
       if (matchesPropertyTree(props, propertyTree, recursive)) {
         callback(value, oldValue, propertyTree, details.variable);
       }
     }
-
-    return propertyTree;
   }
 
   function triggerChangesEvent(jsync, props, callback) {
     var variable = jsync.root.variable;
-
     if (props) {
       // Provide the callback with variable relative to the properties they listed
       for (let j=0; j<props.length; j++) {
@@ -453,128 +449,12 @@ function jsynchronousSetup() {
     callback(variable);
   }
 
-  function findAncestryTree(jsync, details, from, prop, visited) {
-    // Walks up the ancestry, collecting visited hashes, its properties and referenced hashes
-    var startOfRecursion = (prop === undefined && from === undefined);
-    var recur = true;
-
-    if (visited == undefined) {
-      visited = {};  // key->value corresponds to hash->{prop: value's-hash}
-    }
-
-    if (visited[details.hash] === undefined) {
-      visited[details.hash] = {};
-    } else {
-      recur = false;  // Visited already
-    }
-
-    if (startOfRecursion === false) {
-      visited[details.hash][prop] = from.hash;
-    }
-
-    if (recur) {
-      for (var hash in details.parents) {
-        var parent = jsync.objects[hash];
-        var properties = details.parents[hash];
-
-        if (parent === undefined) {
-          throw "Jsynchronous sanity error - finding ancestry tree encountered a parent that is not present in the synchronized objects list.";
-        }
-
-        for (var i=0; i<properties.length; i++) {
-          var property = properties[i];
-          findAncestryTree(jsync, parent, details, property, visited);
-        }
-      }
-    }
-
-    return visited;
-  }
-  function findPropertyTree(ancestryTree, currentHash, targetHash, targetProp, hashesSeen) {
-    // Walks down descendants of provided hash, creating a nested object with each of its keys as properties that lead to targetHash.
-    var props = {}; 
-    var propsValues = ancestryTree[currentHash];
-
-    if (currentHash === targetHash) {
-      props[targetProp] = true;
-      return props;
-    }
-
-    if (hashesSeen === undefined) {
-      hashesSeen = [currentHash];
-    }
-
-    for (var prop in propsValues) {
-      var childHash = propsValues[prop];
-      if (hashesSeen.indexOf(childHash) === -1) {
-        var hashesSeenCopy = hashesSeen.slice();
-        hashesSeenCopy.push(childHash);
-
-        props[prop] = findPropertyTree(ancestryTree, childHash, targetHash, targetProp, hashesSeenCopy);
-      }
-    }
-
-    return props;
-  }
-  function matchesPropertyTree(propertiesList, pt, recursive) {
-    if (propertiesList === undefined || propertiesList.length === 0) {
-      if (pt === true || recursive) {
-        return true;
-      }
-    }
-
-    var expected = propertiesList[0];
-
-    if (expected === '*') {
-      var keys = Object.keys(pt);
-      for (let i=0; i<keys.length; i++) {
-        if (matchesPropertyTree(propertiesList.slice(1), pt[keys[i]], recursive)) {
-          return true;
-        }
-      }
-
-      return false;
-    } else {
-      var matching = pt[expected];
-      if (matching) {
-        return matchesPropertyTree(propertiesList.slice(1), matching, recursive);
-      } else {
-        return false;
-      }
-    }
-  }
+  // ----------------------------------------------------------------
+  // Graph maintenance
+  // ----------------------------------------------------------------
 
 
-  function linkParent(parentDetails, childDetails, prop) {
-    parentDetails.linked[prop] = childDetails;
 
-    var pHash = parentDetails.hash
-
-    if (childDetails.parents[pHash] === undefined) {
-      childDetails.parents[pHash] = [prop];
-    } else if (childDetails.parents[pHash].indexOf(prop) === -1) {
-      childDetails.parents[pHash].push(prop);
-    }
-  }
-  function unlinkParent(parentDetails, prop) {
-    var childDetails = parentDetails.linked[prop];
-
-    var properties = childDetails.parents[parentDetails.hash];
-    if (properties) {
-      var index = properties.indexOf(prop);
-      if (index !== -1) {
-        properties.splice(index, 1);
-      }
-    }
-
-    delete parentDetails.linked[prop];
-
-    if (properties.length === 0) {
-      delete childDetails.parents[parentDetails.hash];
-    }
-
-    // We don't have to garbage collect the child, that should be triggered by the 'end' operation coming from the server
-  }
   // ----------------------------------------------------------------
   // Entry point
   // ----------------------------------------------------------------

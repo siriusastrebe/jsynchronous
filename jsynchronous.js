@@ -36,8 +36,8 @@ class Change {
     this.hash = syncedObject.hash;
     this.operation = operation;  // set, delete, pop, shift, unshift, etc.
     this.prop = prop;
-    this.oldValue = oldValue;
     this.value = value;
+    this.oldValue = oldValue;
     this.type = flat(type);
     this.oldType = flat(oldType);
 
@@ -54,7 +54,6 @@ class Change {
       this.prop,
       encode(this.value, this.type),
       encode(this.oldValue, this.oldType),
-      // TODO: Rewind mode and client-history cares about the old type
     ]
 
     return change;
@@ -215,6 +214,10 @@ class SyncedObject {
       deleteProperty(obj, prop) {
         const value = obj[prop]
         const type = detailedType(value);
+
+        const operation = 'delete';
+        const change = new Change(syncedObject, operation, prop, undefined, 'undefined', value, type);
+
         if (!isPrimitive(type)) {
           let deadManWalking = value[jsynchronous.reserved_property];
           // TODO: comment these throws out. They aren't errors, they're sanity checks
@@ -224,9 +227,6 @@ class SyncedObject {
 
           deadManWalking.unlinkParent(syncedObject, prop);
         }
-
-        const operation = 'delete';
-        const change = new Change(syncedObject, operation, prop, undefined, 'undefined', value, type);
 
         delete obj[prop];
         return true  // Indicate Success

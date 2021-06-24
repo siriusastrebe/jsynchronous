@@ -140,6 +140,11 @@ async function startTest() {
   await test('Assignment of numbers in quick succession');
 
 
+  const externalReference = $erved.bball['numbers'];
+  $erved.bball.numbersExternalReference = externalReference;
+  await test('Assignment of an external object referencing an existing synchronized variable');
+
+
   delete $erved.bball
   await test('Deletion of object');
 
@@ -376,7 +381,7 @@ async function match(left, right, counter) {
   } else if (counter > 100) {
     return false;
   } else {
-    await wait(80);
+    await wait(50);
     return await match(left, right, counter === undefined ? 1: counter+1);
   }
 }
