@@ -221,7 +221,7 @@ class SyncedObject {
         if (!isPrimitive(type)) {
           let deadManWalking = value[jsynchronous.reserved_property];
           // TODO: comment these throws out. They aren't errors, they're sanity checks
-          if (syncedObject === undefined) {
+          if (deadManWalking === undefined) {
             throw `Jsynchronous sanity error - previously referenced variable was not being tracked.`
           }
 
