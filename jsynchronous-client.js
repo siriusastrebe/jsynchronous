@@ -182,7 +182,7 @@ function jsynchronousSetup() {
     for (var j=0; j<references.length; j++) {
       var r = references[j];
       var childDetails = resolveSyncedVariable(r.hash, jsync);
-      link(r.details, childDetails, r.prop);
+      //link(r.details, childDetails, r.prop);
       r.details.variable[r.prop] = childDetails.variable;
     }
     jsync.staging.references.length = 0;
@@ -262,7 +262,7 @@ function jsynchronousSetup() {
       value = resolvePrimitive(type, newDetails[1]);
     } else {
       var childDetails = resolveSyncedVariable(newDetails[1], jsync);
-      link(details, childDetails, prop, jsync);
+      //link(details, childDetails, prop, jsync);
       value = childDetails.variable;
     }
 
@@ -289,7 +289,7 @@ function jsynchronousSetup() {
       oldValue = resolvePrimitive(oldType, oldDetails[1]);
     } else {
       var child = resolveSyncedVariable(oldDetails[1], jsync);
-      unlink(details, child, prop);
+      //unlink(details, child, prop);
     }
 
     delete object[prop];
@@ -451,135 +451,6 @@ function jsynchronousSetup() {
     }
     callback(variable);
   }
-
-  // ----------------------------------------------------------------
-  // Graph maintenance
-  // ----------------------------------------------------------------
-  // We maintain in memory the parents, children, and all descendants!! of each syncedVar
-  // On linked lists, this descendants list can be O(n^2) in memory! Circular or doubly-linked lists are 2x worse.
-  // This gives us O(1) lookup of if a descendant exists, and efficient traversals. We maintain these 
-  // memory intensive data structures to enable walking down property lists efficiently, something
-  // we need for 'set' and 'delete' events which can be very frequent, as well as 'changes' with a property list.
-
-  // Is this Memory<-CPU tradeoff worthwhile? It's tempting to say the network is the true bottleneck.
-
-  function link(parent, child, prop) {
-    if (child.parents[parent.hash] === undefined) {
-      child.parents[parent.hash] = {details: parent, props: [prop]};
-    } else if (child.parents[parent.hash].props.indexOf(prop) === -1) {
-      child.parents[parent.hash].props.push(prop);
-    } else {
-      // TODO: Delete this sanity error and else if above, replace w/ else. Waste compute if everything works. 
-      throw "Jsynchronous sanity error - Child already has a parent along the property " + prop;
-    }
-
-    if (parent.children[child.hash] === undefined) {
-      parent.children[child.hash] = {details: child, props: [prop]};
-    } else if (parent.children[child.hash].props.indexOf(prop) === -1) {
-      parent.children[child.hash].props.push(prop);
-    } else {
-      // TODO: Delete this sanity error and else if above, replace w/ else. Waste compute if everything works. 
-      throw "Jsynchronous sanity error - Parent already has a child along the property " + prop;
-    }
-
-    var family = Object.keys(child.descendants);
-    if (family.indexOf(child.hash) === -1) {
-      family.push(child.hash);
-    }
-
-    linkAncestors(parent, family, prop);
-  }
-  function linkAncestors(parent, hashes, prop, visited) {
-    if (visited === undefined) visited = {};
-
-    for (var i=0; i<hashes.length; i++) {
-      var hash = hashes[i];
-      if (parent.descendants[hash] === undefined) {
-        parent.descendants[hash] = [prop]
-      } else if (parent.descendants[hash].indexOf(prop) === -1) {
-        parent.descendants[hash].push(prop);
-      }
-    }
-
-    if (!visited[parent.hash]) {
-      visited[parent.hash] = true;
-      for (var hash in parent.parents) {
-        for (var i=0; i<parent.parents[hash].props.length; i++) {
-          var property = parent.parents[hash].props[i];
-          var details = parent.parents[hash].details;
-          linkAncestors(details, hashes, property, visited);
-        }
-      }
-    }
-  }
-
-  function unlink(parent, child, prop) {
-    if (child.parents[parent.hash] === undefined) {
-      // TODO: Delete this throw, if everything works should be redundant
-      throw "Jsynchronous sanity error - Unlinking child with no existing reference to parent."
-    }
-    if (parent.children[child.hash] === undefined) {
-      // TODO: Delete this throw, if everything works should be redundant
-      throw "Jsynchronous sanity error - Unlinking parent with no existing reference to child."
-    }
-
-    var index = child.parents[parent.hash].props.indexOf(prop);
-    child.parents[parent.hash].props.splice(index, 1);
-    if (child.parents[parent.hash].props.length === 0) {
-      delete child.parents[parent.hash];
-    }
-
-    index = parent.children[child.hash].props.indexOf(prop);
-    parent.children[child.hash].props.splice(index, 1);
-    if (parent.children[child.hash].props.length === 0) {
-      delete parent.children[child.hash];
-    }
-
-    var hashes = Object.keys(child.descendants);
-    for (let i=0; i<hashes.length; i++) {
-      var hash = hashes[i];
-      unlinkAncestors(parent, hash, prop);
-    }
-    unlinkAncestors(parent, child.hash, prop);
-  }
-  function unlinkAncestors(parent, hash, prop, visited) {
-    if (visited === undefined) visited = {};
-
-    if (!visited[parent.hash]) visited[parent.hash] = true;
-
-    if (parent.descendants[hash] === undefined) {
-      // TODO: Delete these sanity errors
-      throw "Jsynchronous sanity error - Unlinking descendant who is missing descendants hash " + hash;
-    } else if (parent.descendants[hash].indexOf(prop) === -1) {
-      throw "Jsynchronous sanity error - Unlinking descendant who is missing prop " + prop;
-    } else {
-      var index = parent.descendants[hash].indexOf(prop);
-      parent.descendants[hash].splice(index, 1);
-      if (parent.descendants[hash].length === 0) {
-        delete parent.descendants[hash];
-        // This node is no longer an ancestor of this hash.
-        for (var pHash in parent.parents) {
-          for (var i=0; i<parent.parents[pHash].props.length; i++) {
-            var property = parent.parents[pHash].props[i];
-            var details = parent.parents[pHash].details;
-            unlinkAncestors(details, hash, property, visited);
-          }
-        }
-      }
-    }
-    // No need to garbage collect the child, that should be triggered by the 'end' op coming from the server
-  }
-
-  function guidedWalk(propertiesList, details) {
-    // Walks down property list towards target, returning false if no matches. 
-    // If successful, returns array of properties walked down.
-  }
-
-  function walkTowards(properties, callback) {
-    // Walks down properties. Upon reacing the end calls and returns with callback's value.
-    // Breadth first to ensure we get a shortest route.
-  }
-
 
   // ----------------------------------------------------------------
   // Entry point

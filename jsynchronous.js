@@ -294,13 +294,16 @@ class JSynchronous {
     options = options || {}
 
     this.name = options.name || syncedNames[''] === undefined ? '' : noCollisionHash(syncedNames);
-    this.startTime = new Date().getTime();
+    this.startTime = undefined;
     this.objects = {};
     this.listeners = options.listeners || [];
     this.counter = 0;  // counter is always 1 more than the latest change's id.
     this.send = options.send || jsynchronous.send;
-    this.wait = true;  // Ignore proxy setters while jsynchronous handles creation of the data structure
     this.buffer_time = options.buffer_time || 0;
+    this.rewind = options.rewind || false;
+    this.client_history = options.client_history || 0;
+    this.history_limit = this.rewind ? Infinity : (options.history_limit || 100000);
+    this.wait = true;  // Ignore proxy setters while jsynchronous handles creation of the data structure
     this.history = [];
 
     // You can reference jsynchronized variables from other places in your app. Be careful however, when assigning object and arrays to synchronized variables. The ALL of the contents will become visible to the connected clients.
@@ -311,6 +314,7 @@ class JSynchronous {
     this.unsyncReservedWord = options.unsync || '$unsync';
     this.startsyncReservedWord = options.startsync || '$tart';
     this.listenersReservedWord = options.listeners || '$listeners';
+    this.infoReservedWord = options.listeners || '$info';
 
     // Cerce this. to refer to this jsynchronous instance
     this.reserved = {}
@@ -319,6 +323,7 @@ class JSynchronous {
     this.reserved[this.unsyncReservedWord]    = ((a) => this.un_sync(a));
     this.reserved[this.startsyncReservedWord] = ((a) => this.start_sync(a));
     this.reserved[this.listenersReservedWord] = (() => this.listeners);
+    this.reserved[this.infoReservedWord]      = (() => this.info());
 
     this.bufferTimeout = undefined;
     this.queuedCommunications = [];
@@ -338,10 +343,6 @@ class JSynchronous {
       throw `Cannot jsynchronize a variable that references an already synchronized variable`;
     }
 
-    if (this.wait === false && this.send === undefined) {
-      throw `jsynchronize requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmitied to connected clients. Use syncedVariable.jsync(websocket) to add a websocket to connected clients.`;
-    }
-
     if (syncedNames[this.name]) {
       throw `Jsynchronous name ${this.name} is already in use!`;
     }
@@ -350,18 +351,58 @@ class JSynchronous {
     this.root = new SyncedObject(this, initial).proxy;
 
     this.wait = options.wait || false;
+
+    if (this.wait === false && this.send === undefined) {
+      throw `jsynchronize requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmittied to connected clients.\nUse syncedVariable.$ync(websocket) to add a websocket to connected clients.\nYou can also pass in as an option {send: () => {}} to jsynchronous()`;
+    } else {
+      this.start = new Date().getTime();
+    }
+  }
+  info() {
+    return {
+      wait: this.wait,
+      name: this.name,
+      startTime: this.startTime,
+      counter: this.counter,
+      buffer_time: this.buffer_time,
+      rewind: this.rewind,
+      client_history: this.client_history,
+      history_limit: this.history_limit,
+      history_size: this.history.length,
+
+      reserved_words: {
+        $ync: this.jsyncReservedWord,
+        $onmessage: this.onmessageReservedWord,
+        $unsync: this.unsyncReservedWord,
+        $tart: this.startsyncReservedWord,
+        $listeners: this.listenersReservedWord,
+        $info: this.infoReservedWord
+      },
+      listeners: this.listeners
+    }
   }
   communicate(change) {
     if (this.wait === false) {
+
       this.history.push(change);
+
+      if (!this.rewind) {
+        if (this.history.length > this.history_limit) {
+          this.history = this.history.slice(Math.floor(this.history_limit / 2));
+        }
+      }
+
+      if (this.history.length % 100000 === 0) {
+        console.log(this.history.length);
+      }
       this.queuedCommunications.push(change);
 
       if (this.bufferTimeout === undefined) {
-        this.bufferTimeout = setTimeout(() => this.sendPackets(), this.buffer_time);
+        this.bufferTimeout = setTimeout(() => this.sendChanges(), this.buffer_time);
       }
     }
   }
-  sendPackets() {
+  sendChanges() {
     this.bufferTimeout = undefined;
 
     let min = 0;
@@ -381,7 +422,7 @@ class JSynchronous {
       return c.encode();
     });
 
-    if (changes.length-1 !== max - min) {
+    if (changes.length-1 !== max-min) {
       throw `Jsynchronous sanity error - Attempting to send changes but size of changes doesn't match the final tally. Expected ${changes.length} got ${max - min}`;
     }
 
@@ -390,14 +431,22 @@ class JSynchronous {
     });
     this.queuedCommunications.length = 0;
   }
+  sendInitial(websocket) {
+    this.send(websocket, JSON.stringify(this.describe()));
+  }
   start_sync(jsync) {
     // If the constructor option {wait: true} was passed, starts sending packets to connected clients. 
     if (this.send === undefined) {
-      throw `jsynchronize requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmitied to connected clients. Use syncedVariable.jsync(websocket) to add a websocket to connected clients.`;
+      throw `jsynchronize requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmittied to connected clients.\nUse syncedVariable.$ync(websocket) to add a websocket to connected clients.\nYou can also pass in as an option {send: () => {}} to jsynchronous()`;
     }
 
-    this.sendPackets();
-    this.wait = false;
+    if (wait === true) {
+      this.start = new Date().getTime();
+      this.listeners.forEach((websocket) => {
+        this.sendInitial(websocket);
+      });
+      this.wait = false;
+    }
   }
   j_sync(websocket) {
     if (Array.isArray(websocket)) {
@@ -412,7 +461,9 @@ class JSynchronous {
         throw 'jsynchronous Error in .jsync(websocket), websocket is already being listened on: ' + websocket;
       }
 
-      this.send(websocket, JSON.stringify(this.describe()));
+      if (this.wait === false) {
+        this.sendInitial(websocket);
+      }
     }
   }
   un_sync(websocket) {
