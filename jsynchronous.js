@@ -305,7 +305,7 @@ class JSynchronous {
     this.history_limit = options.history_limit || 100000;
     this.wait = true;  // Ignore proxy setters while jsynchronous handles creation of the data structure
     this.history = [];
-    this.rewindInitial;
+    this.rewindInitial = undefined;
 
     // You can reference jsynchronized variables from other places in your app. Be careful however, when assigning object and arrays to synchronized variables. The ALL of the contents will become visible to the connected clients.
 
@@ -399,12 +399,12 @@ class JSynchronous {
   sendChanges() {
     this.bufferTimeout = undefined;
 
-    let min = 0;
-    let counter = 0;
-    let max = 0;
+    let min;
+    let counter;
+    let max;
 
     const changes = this.queuedCommunications.map((c) => {
-      if (min === 0) {
+      if (min === undefined) {
         min = c.id;
       } else if (counter+1 !== c.id) {
         throw `Jsynchronous sanity error - Attempting to send changes but they're not ascending order. Got ${c.id}, expected ${counter+1}`;

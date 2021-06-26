@@ -36,15 +36,19 @@ function jsynchronousSetup() {
       var settings = json[3]
       var variableData = json[4];
 
-console.log('New jsync', counter);
       newJsynchronous(name, counter, settings, variableData);
     } else if (op === 'changes') {
       var name = json[1];
       var minCounter = json[2];
       var maxCounter = json[3];
       var changes = json[4];
-console.log('count likes to count', minCounter, maxCounter, changes);
-      processChanges(name, minCounter, maxCounter, changes);
+
+      var jsync = jsyncs[name];
+      if (jsync === undefined) {
+        throw "JSynchronous error - Server provided changes for a variable not registered with this client with the name " + name;
+      }
+
+      processChanges(name, minCounter, maxCounter, changes, jsync);
     }
   }
 
@@ -81,6 +85,7 @@ console.log('count likes to count', minCounter, maxCounter, changes);
       changesEvents: [],
       standIn: standIn || false,
       rewind: settings.rewind || false,
+      rewound: settings.rewound || false,
       client_history: settings.client_history || false,
       history: [],
       staging: {
@@ -92,8 +97,6 @@ console.log('count likes to count', minCounter, maxCounter, changes);
 
   function newJsynchronous(name, counter, settings, data) {
     var jsync = jsyncObject(name, counter, settings);
-
-    jsyncs[name] = jsync;
 
     for (var i=0; i<data.length; i++) {
       var d = data[i];
@@ -109,7 +112,20 @@ console.log('count likes to count', minCounter, maxCounter, changes);
 
     resolveReferences(jsync);
 
-    return jsync.root;
+    if (settings.rewind) {
+      jsync.initial = {
+        name: name, 
+        counter: counter, 
+        settings: settings, 
+        data: data
+      }
+    }
+
+    if (!settings.rewound) {
+      jsyncs[name] = jsync;
+    }
+
+    return jsync;
   }
 
   function standInVariable(name, type) {
@@ -126,7 +142,7 @@ console.log('count likes to count', minCounter, maxCounter, changes);
   function createSyncedVariable(hash, type, each, jsync, isRoot) {
     // This function relies on resolveReferences() being called after all syncedVariables in the payload are processed
     var standIn;
-    if (isRoot) {
+    if (isRoot && jsync.rewind !== true) {
       var name = jsync.name;
       if (standIns[name]) {
         standIn = standIns[name];
@@ -160,7 +176,9 @@ console.log('count likes to count', minCounter, maxCounter, changes);
       details.variable = newCollection(type);
     }
 
-    addSynchronizedVariableMethods(jsync, details.variable);
+    if (isRoot) {
+      addSynchronizedVariableMethods(jsync, details.variable);
+    }
 
     jsync.objects[hash] = details;
 
@@ -196,12 +214,7 @@ console.log('count likes to count', minCounter, maxCounter, changes);
     jsync.staging.references.length = 0;
   }
 
-  function processChanges(name, minCounter, maxCounter, changes) {
-    var jsync = jsyncs[name];
-    if (jsync === undefined) {
-      throw "JSynchronous error - Server provided changes for a variable not registered with this client with the name " + name;
-    }
-
+  function processChanges(name, minCounter, maxCounter, changes, jsync) {
     if (minCounter !== jsync.counter) {
       throw "Jsynchronous error - Updates skipped. Expected " + jsync.counter + " got " + minCounter + ". This means your TCP/IP connection was reset in your transport";
     } else {
@@ -253,7 +266,7 @@ console.log('count likes to count', minCounter, maxCounter, changes);
       }
 
       if (jsync.rewind || jsync.client_history) { 
-        jsync.history.push();
+        jsync.history.push(change);
       }
     }
 
@@ -315,6 +328,31 @@ console.log('count likes to count', minCounter, maxCounter, changes);
   function endObject(details, jsync) {
     // Memento mori
     delete jsync.objects[details.hash];
+  }
+
+  function rewind(jsync, counter) {
+    if (jsync.rewind === true) {
+      var settings = {};
+      var initial = jsync.initial;
+
+      for (var key in initial.settings) {
+        settings[key] = initial.settings[key];
+      }
+
+      settings.rewound = true;
+      settings.rewind = false;  // Rewound jsyncs don't keep separate history and can't have $rewind() called.
+      settings.client_history = 0;
+
+      var rewound = newJsynchronous(initial.name, initial.counter, settings, initial.data);
+console.log(rewound);
+      var changes = jsync.history.slice(0, counter);
+      processChanges(name, 0, counter, changes, rewound);
+      return rewound.root.variable;
+    }
+  }
+
+  function nearestCachedRewind(counter) {
+    // TODO: implement reverseChanges, implement this, cache rewinds, refactor rewinds to reverse if it's faster than processing changes forwards. All performance considerations.
   }
 
   // ----------------------------------------------------------------
@@ -440,11 +478,7 @@ console.log('count likes to count', minCounter, maxCounter, changes);
     });
 
     Object.defineProperty(targetVariable, '$info', { 
-      value: function $info(event, firstArg, secondArg, thirdArg) {
-        if (jsync.standIn && jsync.jsync) {
-          jsync = jsync.jsync; 
-        }
-
+      value: function $info() {
         if (jsync.standIn) {
           return {
             name: jsync.name,
@@ -455,6 +489,7 @@ console.log('count likes to count', minCounter, maxCounter, changes);
             name: jsync.name,
             counter: jsync.counter,
             rewind: jsync.rewind,
+            rewind: jsync.rewound,
             client_history: jsync.client_history,
             history_length: jsync.history.length,
             standIn: false,
@@ -463,6 +498,15 @@ console.log('count likes to count', minCounter, maxCounter, changes);
       },
       writable: true,
     });
+
+    if (jsync.rewind === true) {
+      Object.defineProperty(targetVariable, '$rewind', {
+        value: function $rewind(counter) {
+          return rewind(jsync, counter);
+        },
+        writable: true,
+      });
+    }
   }
 
   function triggerStatefulEvents(details, prop, value, oldValue, jsync) {
