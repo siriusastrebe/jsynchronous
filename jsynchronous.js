@@ -302,9 +302,10 @@ class JSynchronous {
     this.buffer_time = options.buffer_time || 0;
     this.rewind = options.rewind || false;
     this.client_history = options.client_history || 0;
-    this.history_limit = this.rewind ? Infinity : (options.history_limit || 100000);
+    this.history_limit = options.history_limit || 100000;
     this.wait = true;  // Ignore proxy setters while jsynchronous handles creation of the data structure
     this.history = [];
+    this.rewindInitial;
 
     // You can reference jsynchronized variables from other places in your app. Be careful however, when assigning object and arrays to synchronized variables. The ALL of the contents will become visible to the connected clients.
 
@@ -348,14 +349,19 @@ class JSynchronous {
     }
     syncedNames[this.name] = this;
 
+    // Synchronize the variable
     this.root = new SyncedObject(this, initial).proxy;
 
     this.wait = options.wait || false;
 
     if (this.wait === false && this.send === undefined) {
       throw `jsynchronize requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmittied to connected clients.\nUse syncedVariable.$ync(websocket) to add a websocket to connected clients.\nYou can also pass in as an option {send: () => {}} to jsynchronous()`;
-    } else {
-      this.start = new Date().getTime();
+    }
+
+    this.start = new Date().getTime();
+
+    if (this.rewind === true && this.wait === false) {
+      this.rewindInitial = this.describe();
     }
   }
   info() {
@@ -368,7 +374,7 @@ class JSynchronous {
       rewind: this.rewind,
       client_history: this.client_history,
       history_limit: this.history_limit,
-      history_size: this.history.length,
+      history_length: this.history.length,
 
       reserved_words: {
         $ync: this.jsyncReservedWord,
@@ -383,18 +389,6 @@ class JSynchronous {
   }
   communicate(change) {
     if (this.wait === false) {
-
-      this.history.push(change);
-
-      if (!this.rewind) {
-        if (this.history.length > this.history_limit) {
-          this.history = this.history.slice(Math.floor(this.history_limit / 2));
-        }
-      }
-
-      if (this.history.length % 100000 === 0) {
-        console.log(this.history.length);
-      }
       this.queuedCommunications.push(change);
 
       if (this.bufferTimeout === undefined) {
@@ -406,14 +400,14 @@ class JSynchronous {
     this.bufferTimeout = undefined;
 
     let min = 0;
-    let counter;
+    let counter = 0;
     let max = 0;
 
     const changes = this.queuedCommunications.map((c) => {
-      if (counter === undefined) {
+      if (min === 0) {
         min = c.id;
       } else if (counter+1 !== c.id) {
-        throw `Jsynchronous sanity error - Attempting to send changes but they're not ascending order`;
+        throw `Jsynchronous sanity error - Attempting to send changes but they're not ascending order. Got ${c.id}, expected ${counter+1}`;
       }
 
       counter = c.id;
@@ -429,10 +423,40 @@ class JSynchronous {
     this.listeners.forEach((listener) => {
       this.send(listener, JSON.stringify([OP_ENCODINGS['changes'], this.name, min, max, changes]));
     });
+
+    // Now that it's sent, the rest is history
+    this.queuedCommunications.forEach((c) => {
+      this.history.push(c);
+    });
+
     this.queuedCommunications.length = 0;
+
+    if (this.rewind !== true && this.history.length > this.history_limit) {
+      this.history = this.history.slice(Math.floor(this.history.length / 2));
+    }
   }
   sendInitial(websocket) {
-    this.send(websocket, JSON.stringify(this.describe()));
+    if (this.rewind !== true) {
+      this.send(websocket, JSON.stringify(this.describe()));
+    } else {
+      // With rewind mode enabled, we want all clients to have the initial+full history always
+      const initial = JSON.stringify(this.rewindInitial);
+      this.send(websocket, initial); 
+
+      if (this.history.length > 0) {
+        let min;
+        let max;
+        const changes = this.history.map((c) => {
+          if (min === undefined) {
+            min = c.id;
+          }
+          max = c.id;
+          return c.encode();
+        });
+
+        this.send(websocket, JSON.stringify([OP_ENCODINGS['changes'], this.name, min, max, changes]));
+      }
+    }
   }
   start_sync(jsync) {
     // If the constructor option {wait: true} was passed, starts sending packets to connected clients. 
@@ -442,6 +466,7 @@ class JSynchronous {
 
     if (wait === true) {
       this.start = new Date().getTime();
+      this.rewindInitial = this.describe();
       this.listeners.forEach((websocket) => {
         this.sendInitial(websocket);
       });
@@ -478,25 +503,31 @@ class JSynchronous {
   on_message() {
   }
   describe() {
-    if (this.cachedDescription && this.cachedDescription.c === this.counter) {
+    if (this.cachedDescription && this.cachedDescription[2] === this.counter) {
       return this.cachedDescription
+    }
+
+    const settings = {
+      rewind: this.rewind,
+      client_history: this.client_history > 0 ? this.client_history : undefined,
     }
 
     const fullState = [
       OP_ENCODINGS['initial'],
       this.name,
-      this.counter
+      this.counter,
+      settings
     ]
 
     const variables = recurse(this.root, true);
 
-    fullState[3] = variables.map((v) => {
+    fullState.push(variables.map((v) => {
       const syncedObject = v[jsynchronous.reserved_property];
       if (syncedObject === undefined) {
          throw `Jsynchronous sanity error - describe encountered a variable that was not being tracked.`;
       }
       return syncedObject.describe();
-    });
+    }));
 
     this.cachedDescription = fullState;
 

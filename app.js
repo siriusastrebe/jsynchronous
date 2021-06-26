@@ -57,17 +57,12 @@ const arr = [
 //});
 //
 
-const $ynced = jsynchronous(arr);
+const $ynced = jsynchronous(arr, {rewind: true});
 
 //var reference = $ynced[6]
 
 setInterval(() => {
-//  delete $ynced[6]
-//  reference.a = 'z';
-//  reference.b = 'wer';
-//  reference.z = 'zzzz';
-//
-//  $ynced[6] = reference;
+  $ynced.push(Math.random().toFixed(2));
 }, 5000);
 
 

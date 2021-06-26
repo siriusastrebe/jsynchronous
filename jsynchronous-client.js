@@ -33,14 +33,17 @@ function jsynchronousSetup() {
     if (op === 'initial') {
       var name = json[1];
       var counter = json[2];
-      var variableData = json[3];
+      var settings = json[3]
+      var variableData = json[4];
 
-      newJsynchronousVariable(name, counter, variableData);
+console.log('New jsync', counter);
+      newJsynchronous(name, counter, settings, variableData);
     } else if (op === 'changes') {
       var name = json[1];
       var minCounter = json[2];
       var maxCounter = json[3];
       var changes = json[4];
+console.log('count likes to count', minCounter, maxCounter, changes);
       processChanges(name, minCounter, maxCounter, changes);
     }
   }
@@ -68,7 +71,7 @@ function jsynchronousSetup() {
     return Object.keys(jsyncs);
   }
 
-  function jsyncObject(name, counter) {
+  function jsyncObject(name, counter, settings, standIn) {
     var jsync = {
       name: name,
       counter: counter,  // Counter will always be 1 above the last packet
@@ -76,6 +79,10 @@ function jsynchronousSetup() {
       root: undefined,
       statefulEvents: [],
       changesEvents: [],
+      standIn: standIn || false,
+      rewind: settings.rewind || false,
+      client_history: settings.client_history || false,
+      history: [],
       staging: {
         references: []
       }
@@ -83,8 +90,8 @@ function jsynchronousSetup() {
     return jsync;
   }
 
-  function newJsynchronousVariable(name, counter, data) {
-    var jsync = jsyncObject(name, counter);
+  function newJsynchronous(name, counter, settings, data) {
+    var jsync = jsyncObject(name, counter, settings);
 
     jsyncs[name] = jsync;
 
@@ -109,7 +116,7 @@ function jsynchronousSetup() {
     if (standIns[name]) {
       return standIns[name].variable;
     } else {
-      standIns[name] = jsyncObject(undefined, -1);
+      standIns[name] = jsyncObject(undefined, -1, {}, true);
       standIns[name].variable = newCollection(type);
       addSynchronizedVariableMethods(standIns[name], standIns[name].variable);
       return standIns[name].variable;
@@ -151,8 +158,9 @@ function jsynchronousSetup() {
       details.variable = standIn.variable;
     } else {
       details.variable = newCollection(type);
-      addSynchronizedVariableMethods(jsync, details.variable);
     }
+
+    addSynchronizedVariableMethods(jsync, details.variable);
 
     jsync.objects[hash] = details;
 
@@ -206,7 +214,6 @@ function jsynchronousSetup() {
       var change = changes[i];
       var op = OP_ENCODINGS[change[0]];
       var hash = change[1];
-      var prop;
       var details;
       var pt;
      
@@ -244,7 +251,16 @@ function jsynchronousSetup() {
           }
         }
       }
+
+      if (jsync.rewind || jsync.client_history) { 
+        jsync.history.push();
+      }
     }
+
+    if (jsync.client_history && jsync.client_history < jsync.history.length) {
+      jsync.history = jsync.history.slice(Math.floor(jsync.history.length / 2));
+    }
+
 
     resolveReferences(jsync);
 
@@ -389,8 +405,8 @@ function jsynchronousSetup() {
 
   function addSynchronizedVariableMethods(jsync, targetVariable) {
     // targetVariable will be details.variable if it's synced. Otherwise it should be a stand-in variable
-    Object.defineProperty(targetVariable, '$on', { value: 
-      function $on (event, firstArg, secondArg, thirdArg) {
+    Object.defineProperty(targetVariable, '$on', { 
+      value: function $on(event, firstArg, secondArg, thirdArg) {
         var props;
         var options;
         var callback;
@@ -419,7 +435,33 @@ function jsynchronousSetup() {
         } else {
           throw "Jsynchronous doesn't have an event trigger for event type '" + e.event + "'";
         }
-      }
+      },
+      writable: true,
+    });
+
+    Object.defineProperty(targetVariable, '$info', { 
+      value: function $info(event, firstArg, secondArg, thirdArg) {
+        if (jsync.standIn && jsync.jsync) {
+          jsync = jsync.jsync; 
+        }
+
+        if (jsync.standIn) {
+          return {
+            name: jsync.name,
+            standIn: true
+          }
+        } else {
+          return {
+            name: jsync.name,
+            counter: jsync.counter,
+            rewind: jsync.rewind,
+            client_history: jsync.client_history,
+            history_length: jsync.history.length,
+            standIn: false,
+          }
+        }
+      },
+      writable: true,
     });
   }
 
