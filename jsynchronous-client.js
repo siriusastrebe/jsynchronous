@@ -121,7 +121,7 @@ function jsynchronousSetup() {
       }
     }
 
-    if (!settings.rewound) {
+    if (settings.rewound !== true) {
       jsyncs[name] = jsync;
     }
 
@@ -142,7 +142,7 @@ function jsynchronousSetup() {
   function createSyncedVariable(hash, type, each, jsync, isRoot) {
     // This function relies on resolveReferences() being called after all syncedVariables in the payload are processed
     var standIn;
-    if (isRoot && jsync.rewind !== true) {
+    if (isRoot && jsync.rewound !== true) {
       var name = jsync.name;
       if (standIns[name]) {
         standIn = standIns[name];
@@ -331,6 +331,9 @@ function jsynchronousSetup() {
   }
 
   function rewind(jsync, counter) {
+    if (isNaN(counter)) {
+      throw "$rewind() requires a counter specified to rewind to. Got " + counter;
+    }
     if (jsync.rewind === true) {
       var settings = {};
       var initial = jsync.initial;
@@ -344,7 +347,6 @@ function jsynchronousSetup() {
       settings.client_history = 0;
 
       var rewound = newJsynchronous(initial.name, initial.counter, settings, initial.data);
-console.log(rewound);
       var changes = jsync.history.slice(0, counter);
       processChanges(name, 0, counter, changes, rewound);
       return rewound.root.variable;
@@ -489,7 +491,7 @@ console.log(rewound);
             name: jsync.name,
             counter: jsync.counter,
             rewind: jsync.rewind,
-            rewind: jsync.rewound,
+            rewound: jsync.rewound,
             client_history: jsync.client_history,
             history_length: jsync.history.length,
             standIn: false,
