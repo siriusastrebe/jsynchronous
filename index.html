@@ -56,6 +56,7 @@
 
   socket.on('msg', function (a, b, c) {
     jsynchronous.onmessage(a);
+    console.log(a);
     //console.log(jsynchronous());
     document.body.innerHTML = JSON.stringify(jsynchronous());
   });

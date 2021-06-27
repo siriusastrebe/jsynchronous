@@ -20,7 +20,8 @@ function jsynchronousSetup() {
     'set',
     'delete',
     'new',
-    'end'
+    'end',
+    'snapshot'
   ]
 
   var jsyncs = {}
@@ -88,6 +89,7 @@ function jsynchronousSetup() {
       rewound: settings.rewound || false,
       client_history: settings.client_history || false,
       history: [],
+      snapshots: {},
       staging: {
         references: []
       }
@@ -229,7 +231,7 @@ function jsynchronousSetup() {
       var hash = change[1];
       var details;
       var pt;
-     
+
       if (op === 'set' || op === 'delete' || op === 'end') {
         details = jsync.objects[hash];
         if (details === undefined) {
@@ -252,6 +254,10 @@ function jsynchronousSetup() {
         createSyncedVariable(hash, TYPE_ENCODINGS[type], each, jsync); 
       } else if (op === 'end') {
         endObject(details, jsync);
+      } else if (op === 'snapshot') {
+        var counter = change[1];
+        var name = change[2];
+        createSnapshot(counter, name, jsync);
       } else {
         throw "Jsynchronous error - Unidentified operation coming from server: " + op;
       }
@@ -330,10 +336,23 @@ function jsynchronousSetup() {
     delete jsync.objects[details.hash];
   }
 
-  function rewind(jsync, counter) {
-    if (isNaN(counter)) {
-      throw "$rewind() requires a counter specified to rewind to. Got " + counter;
+  function rewind(jsync, snapshot, counter) {
+    if (typeof snapshot !== 'string' && typeof snapshot !== 'number' && isNaN(counter)) {
+      throw "$rewind() requires a snapshot name as the first argument, or a counter number as the second."
     }
+
+    if (typeof snapshot === 'string' || typeof snapshot === 'number') {
+      if (jsync.snapshots[snapshot]) {
+        counter = jsync.snapshots[snapshot].counter;
+      } else {
+        throw "No snapshot with the name " + snapshot;
+      }
+    } 
+
+    if (typeof counter !== 'number' || counter === null) {
+      throw "$rewind() requires a snapshot name as the first argument, or a counter number as the second."
+    }
+
     if (jsync.rewind === true) {
       var settings = {};
       var initial = jsync.initial;
@@ -350,11 +369,28 @@ function jsynchronousSetup() {
       var changes = jsync.history.slice(0, counter);
       processChanges(name, 0, counter, changes, rewound);
       return rewound.root.variable;
+    } else {
+      throw "This synchronized variable is not set up for rewind mode";
     }
   }
 
   function nearestCachedRewind(counter) {
     // TODO: implement reverseChanges, implement this, cache rewinds, refactor rewinds to reverse if it's faster than processing changes forwards. All performance considerations.
+  }
+
+  function createSnapshot(counter, name, jsync) {
+    jsync.snapshots[name] = {counter: counter, name: name};
+  }
+
+  function sortedSnapshots(jsync) {
+    var snapshots = [];
+    for (var name in jsync.snapshots) {
+      snapshots.push(jsync.snapshots[name]);
+    }
+    snapshots.sort(function (a, b) {
+      return a.counter - b.counter;
+    });
+    return snapshots;
   }
 
   // ----------------------------------------------------------------
@@ -494,6 +530,7 @@ function jsynchronousSetup() {
             rewound: jsync.rewound,
             client_history: jsync.client_history,
             history_length: jsync.history.length,
+            snapshots: sortedSnapshots(jsync),
             standIn: false,
           }
         }
@@ -503,8 +540,8 @@ function jsynchronousSetup() {
 
     if (jsync.rewind === true) {
       Object.defineProperty(targetVariable, '$rewind', {
-        value: function $rewind(counter) {
-          return rewind(jsync, counter);
+        value: function $rewind(snapshot, counter) {
+          return rewind(jsync, snapshot, counter);
         },
         writable: true,
       });

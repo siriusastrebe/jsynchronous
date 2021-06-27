@@ -61,8 +61,12 @@ const $ynced = jsynchronous(arr, {rewind: true});
 
 //var reference = $ynced[6]
 
+let snapshots = 0;
 setInterval(() => {
   $ynced.push(Math.random().toFixed(2));
+  if (Math.random() <  0.5) {
+    $ynced.$napshot(snapshots++);
+  }
 }, 5000);
 
 

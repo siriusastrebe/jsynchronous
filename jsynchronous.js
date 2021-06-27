@@ -19,7 +19,8 @@ const OP_ENCODINGS = {
   'set': 2,
   'delete': 3,
   'new': 4,
-  'end': 5
+  'end': 5,
+  'snapshot': 6
 }
 
 const syncedNames = {};
@@ -98,6 +99,30 @@ class Deletion {
       this.hash
     ]
     return deletion;
+  }
+}
+
+class Snapshot {
+  constructor(jsync, name) {
+    this.id = jsync.counter++;
+    this.operation = 'snapshot';
+    this.name = name;
+
+    if (jsync.snapshots[name]) {
+      throw `Jsynchronous snapshot by the name ${name} already exists!`;
+    }
+
+    jsync.snapshots[name] = this;
+
+    jsync.communicate(this);
+  } 
+  encode() {
+    const snapshot = [
+       OP_ENCODINGS[this.operation],
+       this.id,
+       this.name
+    ]
+    return snapshot;
   }
 }
 
@@ -305,6 +330,7 @@ class JSynchronous {
     this.history_limit = options.history_limit || 100000;
     this.wait = true;  // Ignore proxy setters while jsynchronous handles creation of the data structure
     this.history = [];
+    this.snapshots = {};
     this.rewindInitial = undefined;
 
     // You can reference jsynchronized variables from other places in your app. Be careful however, when assigning object and arrays to synchronized variables. The ALL of the contents will become visible to the connected clients.
@@ -316,6 +342,7 @@ class JSynchronous {
     this.startsyncReservedWord = options.startsync || '$tart';
     this.listenersReservedWord = options.listeners || '$listeners';
     this.infoReservedWord = options.listeners || '$info';
+    this.snapshotReservedWord = options.listeners || '$napshot';
 
     // Cerce this. to refer to this jsynchronous instance
     this.reserved = {}
@@ -325,6 +352,7 @@ class JSynchronous {
     this.reserved[this.startsyncReservedWord] = ((a) => this.start_sync(a));
     this.reserved[this.listenersReservedWord] = (() => this.listeners);
     this.reserved[this.infoReservedWord]      = (() => this.info());
+    this.reserved[this.snapshotReservedWord]  = ((a) => this.snapshot(a));
 
     this.bufferTimeout = undefined;
     this.queuedCommunications = [];
@@ -501,6 +529,9 @@ class JSynchronous {
     }
   }
   on_message() {
+  }
+  snapshot(name) {
+    new Snapshot(this, name);
   }
   describe() {
     if (this.cachedDescription && this.cachedDescription[2] === this.counter) {
