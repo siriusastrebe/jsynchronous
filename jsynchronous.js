@@ -344,7 +344,7 @@ class JSynchronous {
     this.infoReservedWord = options.listeners || '$info';
     this.snapshotReservedWord = options.listeners || '$napshot';
 
-    // Cerce this. to refer to this jsynchronous instance
+    // Coerce this to refer to this jsynchronous instance
     this.reserved = {}
     this.reserved[this.jsyncReservedWord]     = ((a) => this.j_sync(a));
     this.reserved[this.onmessageReservedWord] = ((a) => this.on_message(a));

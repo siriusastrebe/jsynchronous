@@ -30,16 +30,15 @@ function jsynchronousSetup() {
   function onmessage(data) {
     var json = JSON.parse(data);
     var op = OP_ENCODINGS[json[0]]; 
+    var name = json[1];
 
     if (op === 'initial') {
-      var name = json[1];
       var counter = json[2];
       var settings = json[3]
       var variableData = json[4];
 
       newJsynchronous(name, counter, settings, variableData);
     } else if (op === 'changes') {
-      var name = json[1];
       var minCounter = json[2];
       var maxCounter = json[3];
       var changes = json[4];
@@ -86,7 +85,6 @@ function jsynchronousSetup() {
       changesEvents: [],
       standIn: standIn || false,
       rewind: settings.rewind || false,
-      rewound: settings.rewound || false,
       client_history: settings.client_history || false,
       history: [],
       snapshots: {},
@@ -94,11 +92,24 @@ function jsynchronousSetup() {
         references: []
       }
     }
+
+    if (settings.rewound === true) {
+      jsync.rewound = true;
+    }
+
     return jsync;
   }
 
   function newJsynchronous(name, counter, settings, data) {
-    var jsync = jsyncObject(name, counter, settings);
+    var rootType = TYPE_ENCODINGS[data[0][1]];
+    var rewound = (settings.rewound === true);
+
+    var jsync;
+    if (jsyncs[name] && rootType === detailedType(jsyncs[name].variable) && !rewound) {
+      jsync = jsyncs[name];  // If init is called multiple times, just update the original
+    } else {
+      jsync = jsyncObject(name, counter, settings);
+    }
 
     for (var i=0; i<data.length; i++) {
       var d = data[i];
@@ -123,9 +134,15 @@ function jsynchronousSetup() {
       }
     }
 
-    if (settings.rewound !== true) {
+    if (rewound !== true) {
       jsyncs[name] = jsync;
+
+      if (jsynchronous.send === undefined) {
+        console.warn("Jsynchronous client hasn't been provided a jsynchronous.send = (data) => {}  function. This jsynchronous client will not be able to re-synchronize in the event of a TCP/IP connection reset.");
+        jsynchronous.send_warn = true;
+      }
     }
+
 
     return jsync;
   }
@@ -141,8 +158,7 @@ function jsynchronousSetup() {
     }
   }
 
-  function createSyncedVariable(hash, type, each, jsync, isRoot) {
-    // This function relies on resolveReferences() being called after all syncedVariables in the payload are processed
+  function standInMatch(isRoot, type, jsync) {
     var standIn;
     if (isRoot && jsync.rewound !== true) {
       var name = jsync.name;
@@ -155,12 +171,18 @@ function jsynchronousSetup() {
         standIn = undefined;
         console.error( "jsynchronous('" + name + "', '" + standInType + "') is the wrong variable type, the type originating from the server is '" + type + "'. Your stand-in variable is unable to reference the synchronized variable." )
       }
+    }
+    return standIn;
+  }
 
-      // Copy events assigned to standIn while waiting on the synchronized variable
-      if (standIn) {
-        jsync.statefulEvents = standIn.statefulEvents;
-        jsync.changesEvents = standIn.changesEvents;
-      }
+  function createSyncedVariable(hash, type, each, jsync, isRoot) {
+    // This function relies on resolveReferences() being called after all syncedVariables in the payload are processed
+    var existing = jsync.objects[hash];
+    var standIn = standInMatch(isRoot, type, jsync)
+    if (standIn) {
+    // Copy events assigned to standIn while waiting on the synchronized variable
+      jsync.statefulEvents = standIn.statefulEvents;
+      jsync.changesEvents = standIn.changesEvents;
     }
 
     var details = {
@@ -174,6 +196,8 @@ function jsynchronousSetup() {
 
     if (standIn) {
       details.variable = standIn.variable;
+    } else if (existing && detailedType(existing) === type){
+      details.variable = jsync.objects[hash];  // If init is called multiple times, update the original references
     } else {
       details.variable = newCollection(type);
     }
@@ -183,6 +207,11 @@ function jsynchronousSetup() {
     }
 
     jsync.objects[hash] = details;
+
+
+    for (var key in details.variable) {
+      delete details.variable[key];  // Start fresh, important when init is called mulitple times
+    }
 
     enumerate(each, type, function (prop, encoded) {
       var t = TYPE_ENCODINGS[encoded[0]]
@@ -217,11 +246,19 @@ function jsynchronousSetup() {
   }
 
   function processChanges(name, minCounter, maxCounter, changes, jsync) {
-    if (minCounter !== jsync.counter) {
-      throw "Jsynchronous error - Updates skipped. Expected " + jsync.counter + " got " + minCounter + ". This means your TCP/IP connection was reset in your transport";
-    } else {
-      jsync.counter = maxCounter+1;
+    if (minCounter < jsync.counter && maxCounter <= jsync.counter) {
+      throw "Jsynchronous sanity error - Duplicate receipt of changes, expected " + jsync.counter + ", got " + jsync.minCounter;
+    } else if (minCounter < jsync.counter && maxCounter > jsync.counter) {
+      throw "Jsynchronous sanity error - Changes received overlap some already registered changes, expected " + jsync.counter + ", got " + minCounter;
+    } else if (minCounter > jsync.counter) {
+      if (jsynchronous.send === undefined) {
+        throw "Jsynchronous - Client is out of sync, unable to resynchronize without a user-specified jsynchronous.send = (data) => {} function";
+      }
+
+      // TODO: Implement missing ranges resync
     }
+
+    jsync.counter = maxCounter+1;
 
     var changesTriggered = [];
 
@@ -279,7 +316,6 @@ function jsynchronousSetup() {
     if (jsync.client_history && jsync.client_history < jsync.history.length) {
       jsync.history = jsync.history.slice(Math.floor(jsync.history.length / 2));
     }
-
 
     resolveReferences(jsync);
 
@@ -481,6 +517,7 @@ function jsynchronousSetup() {
 
   function addSynchronizedVariableMethods(jsync, targetVariable) {
     // targetVariable will be details.variable if it's synced. Otherwise it should be a stand-in variable
+    // This overwrites any previous methods
     Object.defineProperty(targetVariable, '$on', { 
       value: function $on(event, firstArg, secondArg, thirdArg) {
         var props;
