@@ -118,11 +118,10 @@ console.log('Handshaking', secret);
     var rootType = TYPE_ENCODINGS[data[0][1]];
     var rewound = settings.rewound === true;
 
-    var jsync;
-    if (jsyncs[name] && rootType === detailedType(jsyncs[name].variable) && !rewound) {
-      jsync = jsyncs[name];  // If init is called multiple times, just update the original
-    } else {
-      jsync = jsyncObject(name, counter, settings);
+    var jsync = jsyncObject(name, counter, settings);
+
+    if (jsyncs[name] && rootType === detailedType(jsyncs[name].root.variable) && !rewound) {
+      jsync.root = jsyncs[name].root;  // If init is called multiple times, just update the original
     }
 
     for (var i=0; i<data.length; i++) {
@@ -183,18 +182,32 @@ console.log('Handshaking', secret);
         console.error("jsynchronous('" + name + "', '" + standInType + "') is the wrong variable type, the type originating from the server is '" + type + "'. Your stand-in variable is unable to reference the synchronized variable.")
       }
     }
+
+    if (standIn) {
+      // Copy events assigned to standIn while waiting on the synchronized variable
+      for (var i=0; i<standIn.statefulEvents.length; i++) {
+        var e = standIn.statefulEvents[i];
+        if (jsync.statefulEvents.indexOf(e) === -1) {
+          jsync.statefulEvents.push(e);
+        }
+      }
+      for (var i=0; i<standIn.changesEvents.length; i++) {
+        var e = standIn.changesEvents[i];
+        if (jsync.changesEvents.indexOf(e) === -1) {
+          jsync.changesEvents.push(e);
+        }
+      }
+    }
+
     return standIn;
   }
 
   function createSyncedVariable(hash, type, each, jsync, isRoot) {
     // This function relies on resolveReferences() being called after all syncedVariables in the payload are processed
     var existing = jsync.objects[hash];
+    if (!existing && isRoot) existing = jsync.root;
+
     var standIn = standInMatch(isRoot, type, jsync)
-    if (standIn) {
-    // Copy events assigned to standIn while waiting on the synchronized variable
-      jsync.statefulEvents = standIn.statefulEvents;
-      jsync.changesEvents = standIn.changesEvents;
-    }
 
     var details = {
       hash: hash,
@@ -205,10 +218,13 @@ console.log('Handshaking', secret);
       children: {}     // key->value corresponds to childHash->{details: child, props: []}
     }
 
-    if (standIn) {
+console.log('exists', existing);
+
+    if (existing && detailedType(existing.variable) === type) {
+      strip(existing.variable);  // Start variable fresh
+      details.variable = existing.variable;  // If init is called multiple times, update the original references
+    } else if (standIn) {
       details.variable = standIn.variable;
-    } else if (existing && detailedType(existing) === type){
-      details.variable = jsync.objects[hash];  // If init is called multiple times, update the original references
     } else {
       details.variable = newCollection(type);
     }
@@ -218,11 +234,6 @@ console.log('Handshaking', secret);
     }
 
     jsync.objects[hash] = details;
-
-
-    for (var key in details.variable) {
-      delete details.variable[key];  // Start fresh, important when init is called mulitple times
-    }
 
     enumerate(each, type, function (prop, encoded) {
       var t = TYPE_ENCODINGS[encoded[0]]
@@ -257,7 +268,6 @@ console.log('Handshaking', secret);
   }
 
   function processChanges(minCounter, maxCounter, changes, jsync) {
-    console.log(minCounter, jsync.counter)
 
     if (minCounter < jsync.counter) {
       throw "Jsynchronous duplicate receipt of changes, expected " + jsync.counter + ", got " + jsync.minCounter;
@@ -270,10 +280,9 @@ console.log('Handshaking', secret);
         throw "Jsynchronous is out of sync, cannot resync without a successful handshake";
       }
 
-      // TODO: Enable clients to immediately resync if first resync was successful
-      if (jsync.secret 
-          && (jsync.resyncs.length === 0 
-           || new Date() - jsync.resyncs[jsync.resyncs.length-1].t > 8000 
+      if (jsync.secret
+          && (jsync.resyncs.length === 0
+           || new Date() - jsync.resyncs[jsync.resyncs.length-1].t > 8000
            || Object.keys(jsync.storedChanges).length === 0)) {
         console.warn("Jsynchronous client is out of sync. On counter " + jsync.counter + " got " + minCounter + ". Initiaing resync");
 
@@ -534,6 +543,17 @@ console.log('Handshaking', secret);
       return true
     } else {
       return false
+    }
+  }
+
+  function strip(enumerable) {
+    var type = detailedType(enumerable);
+    if (type === 'array') {
+      enumerable.length = 0;
+    } else if (type === 'object') {
+      for (var key in enumerable) {
+        delete enumerable[key];  
+      }
     }
   }
 
