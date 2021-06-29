@@ -7,19 +7,7 @@ const http = require('http');
 const app = express();
 const port = 3000;
 
-//app.get('/socket.io/socket.io.js', (req, res) => {
-//  res.sendFile(__dirname + '/node_modules/index.html');
-//})
 
-
-
-
-
-// Jsynchronous
-jsynchronous.send = (websocket, data) => {
-  websocket.emit('msg', data);
-  console.log('☐', data.length);
-}
 
 
 
@@ -107,6 +95,12 @@ const server = app.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`);
 })
 
+// Jsynchronous
+jsynchronous.send = (websocket, data) => {
+  websocket.emit('msg', data);
+  console.log('☐', data.length);
+}
+
 // Socket.io
 const { Server } = require("socket.io");
 const io = new Server(server);
@@ -114,6 +108,8 @@ const io = new Server(server);
 io.on('connection', (socket) => {
   socket.emit('hello', {contents: 'world'});
   $ynced.$ync(socket);  
+
+  socket.on('msg', (data) => jsynchronous.onmessage(socket, data));
 
   socket.on('disconnect', function() {
     $ynced.$unsync(socket);

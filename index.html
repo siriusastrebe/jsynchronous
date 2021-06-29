@@ -4,55 +4,11 @@
 <script>
   const socket = io();
 
+  jsynchronous.send = function (data) {
+    socket.emit('msg', data);
+  }
+
   var $ynced = jsynchronous('', 'array');
-
-//  $ynced.$on('changes', (a, b, c, d, e, f) => {
-//    console.log('[] triggered', a);
-//  });
-//
-//  $ynced.$on('changes', ['b'], (variable) => {
-//    console.log("['b'] triggered", variable);
-//  });
-//
-//  $ynced.$on('changes', ['b', 'bo'], (variable) => {
-//    console.log("['b', 'bo'] triggered", variable);
-//  });
-//
-//  $ynced.$on('changes', ['a'], (variable) => {
-//    console.log("['a'] triggered", variable);
-//  });
-
-//  $ynced.$on('set', ['b', 'bo'], (value, oldValue, pt) => {
-//    console.log("set ['b', 'bo'] triggered", value, oldValue, pt);
-//  });
-//
-//
-//  $ynced.$on('set', ['b', '*'], (value, oldValue, pt) => {
-//    console.log("set ['b', '*'] triggered", value, oldValue, pt);
-//  });
-//
-//  $ynced.$on('set', ['b'], (value, oldValue, pt) => {
-//    console.log("set ['b'] triggered", value, oldValue, pt);
-//  });
-
-
-//  $ynced.$on('changes', (a) => {
-//    console.log('changes triggered', a);
-//  });
-//
-//  $ynced.$on('set', ['*'], (value, oldValue, pt) => {
-//    console.log("set ['*'] triggered", value, oldValue, pt);
-//  });
-//
-//  $ynced.$on('set', ['*'], {recursive: true}, (value, oldValue, pt) => {
-//    console.log("set ['*'] recursive triggered", value, oldValue, pt);
-//  });
-
-
-
-//  $ynced.$on('set', (value, oldValue, pt) => {
-//    console.log("set triggered", value, oldValue, pt);
-//  });
 
   socket.on('msg', function (a, b, c) {
     jsynchronous.onmessage(a);

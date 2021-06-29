@@ -21,7 +21,10 @@ function jsynchronousSetup() {
     'delete',
     'new',
     'end',
-    'snapshot'
+    'snapshot',
+    'handshake',
+    'resync',
+    'error',
   ]
 
   var jsyncs = {}
@@ -42,13 +45,18 @@ function jsynchronousSetup() {
       var minCounter = json[2];
       var maxCounter = json[3];
       var changes = json[4];
-
       var jsync = jsyncs[name];
       if (jsync === undefined) {
-        throw "JSynchronous error - Server provided changes for a variable not registered with this client with the name " + name;
+        throw "JSynchronous server changes for unknown variable with name '" + name + "'";
       }
-
       processChanges(name, minCounter, maxCounter, changes, jsync);
+    } else if (op === 'handshake') {
+      var secret = json[2];
+      var jsync = jsyncs[name];
+      if (jsync === undefined) {
+        throw "JSynchronous server handshake for unknown variable with name '" + name + "'";
+      }
+      jsync.secret = secret;
     }
   }
 
@@ -87,6 +95,7 @@ function jsynchronousSetup() {
       rewind: settings.rewind || false,
       client_history: settings.client_history || false,
       history: [],
+      secret: undefined,
       snapshots: {},
       staging: {
         references: []
@@ -102,7 +111,7 @@ function jsynchronousSetup() {
 
   function newJsynchronous(name, counter, settings, data) {
     var rootType = TYPE_ENCODINGS[data[0][1]];
-    var rewound = (settings.rewound === true);
+    var rewound = settings.rewound === true;
 
     var jsync;
     if (jsyncs[name] && rootType === detailedType(jsyncs[name].variable) && !rewound) {
@@ -137,12 +146,9 @@ function jsynchronousSetup() {
     if (rewound !== true) {
       jsyncs[name] = jsync;
 
-      if (jsynchronous.send === undefined) {
-        console.warn("Jsynchronous client hasn't been provided a jsynchronous.send = (data) => {}  function. This jsynchronous client will not be able to re-synchronize in the event of a TCP/IP connection reset.");
-        jsynchronous.send_warn = true;
-      }
+      var rootHash = data[0][0];
+      handshake(jsync, rootHash);
     }
-
 
     return jsync;
   }
@@ -169,7 +175,7 @@ function jsynchronousSetup() {
 
       if (standIn && standInType !== type) {
         standIn = undefined;
-        console.error( "jsynchronous('" + name + "', '" + standInType + "') is the wrong variable type, the type originating from the server is '" + type + "'. Your stand-in variable is unable to reference the synchronized variable." )
+        console.error("jsynchronous('" + name + "', '" + standInType + "') is the wrong variable type, the type originating from the server is '" + type + "'. Your stand-in variable is unable to reference the synchronized variable.")
       }
     }
     return standIn;
@@ -246,16 +252,16 @@ function jsynchronousSetup() {
   }
 
   function processChanges(name, minCounter, maxCounter, changes, jsync) {
-    if (minCounter < jsync.counter && maxCounter <= jsync.counter) {
+    if (minCounter < jsync.counter) {
       throw "Jsynchronous sanity error - Duplicate receipt of changes, expected " + jsync.counter + ", got " + jsync.minCounter;
-    } else if (minCounter < jsync.counter && maxCounter > jsync.counter) {
-      throw "Jsynchronous sanity error - Changes received overlap some already registered changes, expected " + jsync.counter + ", got " + minCounter;
     } else if (minCounter > jsync.counter) {
       if (jsynchronous.send === undefined) {
         throw "Jsynchronous - Client is out of sync, unable to resynchronize without a user-specified jsynchronous.send = (data) => {} function";
       }
 
       // TODO: Implement missing ranges resync
+      var payload = [OP_ENCODINGS.indexOf('resync'), ]
+      jsynchronous.send();
     }
 
     jsync.counter = maxCounter+1;
@@ -564,11 +570,12 @@ function jsynchronousSetup() {
             name: jsync.name,
             counter: jsync.counter,
             rewind: jsync.rewind,
-            rewound: jsync.rewound,
+            rewound: jsync.rewound === true,
             client_history: jsync.client_history,
             history_length: jsync.history.length,
             snapshots: sortedSnapshots(jsync),
             standIn: false,
+            handshake: jsync.secret !== undefined,
           }
         }
       },
@@ -613,6 +620,35 @@ function jsynchronousSetup() {
     }
     callback(variable);
   }
+
+  // ----------------------------------------------------------------
+  // Resyncing and communication
+  // ----------------------------------------------------------------
+  function communicate(op, a, b, c, d) {
+    var payload = []
+    payload.push(OP_ENCODINGS.indexOf(op));
+    if (a !== undefined) payload.push(a);
+    if (b !== undefined) payload.push(b);
+    if (c !== undefined) payload.push(c);
+    if (d !== undefined) payload.push(d);
+
+    jsynchronous.send(JSON.stringify(payload));
+  }
+
+  function handshake(jsync, rootHash) {
+    if (jsynchronous.send === undefined) {
+      console.warn("Jsynchronous client hasn't been provided a jsynchronous.send = (data) => {}  function. This jsynchronous client will not be able to re-synchronize in the event of a TCP/IP connection interrupt.");
+    } else {
+      communicate('handshake', name, rootHash);
+
+      setTimeout(() => {
+        if (jsync.secret === undefined) {
+          console.warn("Jsynchronous client->server handshake left hanging for over 60 seconds. This usually means the server has not called jsynchronous.onmessage(websocket, data). Resynchronization is impossible without a successful handshake.");
+        }
+      }, 60000);
+    }
+  }
+
 
   // ----------------------------------------------------------------
   // Entry point

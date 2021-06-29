@@ -20,7 +20,10 @@ const OP_ENCODINGS = {
   'delete': 3,
   'new': 4,
   'end': 5,
-  'snapshot': 6
+  'snapshot': 6,
+  'handshake': 7,
+  'resync': 8,
+  'error': 9
 }
 
 const syncedNames = {};
@@ -318,38 +321,42 @@ class JSynchronous {
     initial = initial || {}
     options = options || {}
 
-    this.name = options.name || syncedNames[''] === undefined ? '' : noCollisionHash(syncedNames);
+    this.name = options.name || '';
     this.startTime = undefined;
     this.objects = {};
-    this.listeners = options.listeners || [];
-    this.counter = 0;  // counter is always 1 more than the latest change's id.
-    this.send = options.send || jsynchronous.send;
+    this.listeners = [];
+    this.secrets = new Map(); // Secrets key->value corresponds to listener->secretHash;
+    this.counter = 0;   // counter is always 1 more than the latest change's id.
+    this.send = (websocket, data) => { (options.send || jsynchronous.send)(websocket, data) };
     this.buffer_time = options.buffer_time || 0;
     this.rewind = options.rewind || false;
     this.client_history = options.client_history || 0;
     this.history_limit = options.history_limit || 100000;
-    this.wait = true;  // Ignore proxy setters while jsynchronous handles creation of the data structure
+    this.wait = true;  // Ignore Proxy setters during inital setup
+    this.started = false;
     this.history = [];
     this.snapshots = {};
     this.rewindInitial = undefined;
 
-    // You can reference jsynchronized variables from other places in your app. Be careful however, when assigning object and arrays to synchronized variables. The ALL of the contents will become visible to the connected clients.
+    // You can reference synchronized variables from other places in your app. Be careful however, when assigning object and arrays to synchronized variables. The ALL of the contents will become visible to the connected clients.
 
-    // These variables are special method names on the root of a jsynchronized variable. They will throw an error if you reassign these methods, so you can rename these methods by passing them into the options.
-    this.jsyncReservedWord = options.jsync || '$ync';
-    this.onmessageReservedWord = options.onmessage || '$onmessage';
-    this.unsyncReservedWord = options.unsync || '$unsync';
-    this.startsyncReservedWord = options.startsync || '$tart';
-    this.listenersReservedWord = options.listeners || '$listeners';
-    this.infoReservedWord = options.listeners || '$info';
-    this.snapshotReservedWord = options.listeners || '$napshot';
+
+
+    // These variables are special method names on the root of a synchronized variable. They will throw an error if you reassign these methods, so you can rename these methods by passing them into the options.
+    this.syncReservedWord = options.$ync || '$ync';
+    this.onmessageReservedWord = options.$onmessage || '$onmessage';
+    this.unsyncReservedWord = options.$unsync || '$unsync';
+    this.startReservedWord = options.$tart || '$tart';
+    this.listenersReservedWord = options.$listeners || '$listeners';
+    this.infoReservedWord = options.$info || '$info';
+    this.snapshotReservedWord = options.$napshot || '$napshot';
 
     // Coerce this to refer to this jsynchronous instance
     this.reserved = {}
-    this.reserved[this.jsyncReservedWord]     = ((a) => this.j_sync(a));
+    this.reserved[this.syncReservedWord]      = ((a) => this.sync(a));
     this.reserved[this.onmessageReservedWord] = ((a) => this.on_message(a));
     this.reserved[this.unsyncReservedWord]    = ((a) => this.un_sync(a));
-    this.reserved[this.startsyncReservedWord] = ((a) => this.start_sync(a));
+    this.reserved[this.startReservedWord]     = ((a) => this.start_sync(a));
     this.reserved[this.listenersReservedWord] = (() => this.listeners);
     this.reserved[this.infoReservedWord]      = (() => this.info());
     this.reserved[this.snapshotReservedWord]  = ((a) => this.snapshot(a));
@@ -361,39 +368,35 @@ class JSynchronous {
     this.cachedDescription = undefined;
 
     if (!enumerable(initial)) {
-      throw `Cannot jsynchronize variables of type ${detailedType(initial)}. Try placing it in an object, or an array and then calling jsynchronous().`;
+      throw `Cannot synchronize variables of type ${detailedType(initial)}. Try placing it in an object, or an array and then calling jsynchronous().`;
     }
 
     if (initial[jsynchronous.reserved_property]) {
-      throw `Cannot jsynchronize an already synchronized variable`;
+      throw `Cannot synchronize an already synchronized variable`;
     }
 
     if (alreadySynchronized(initial)) {
-      throw `Cannot jsynchronize a variable that references an already synchronized variable`;
+      throw `Cannot synchronize a variable that references an already synchronized variable`;
     }
 
+    if (this.name.length > 192) {
+      throw `Jsynchronous name is too long. Shorter names are better for efficient networking`;
+    }
     if (syncedNames[this.name]) {
-      throw `Jsynchronous name ${this.name} is already in use!`;
+      throw `Jsynchronous name '${this.name}' is already in use!`;
     }
     syncedNames[this.name] = this;
 
     // Synchronize the variable
-    this.root = new SyncedObject(this, initial).proxy;
+    this.root = new SyncedObject(this, initial);
 
     this.wait = options.wait || false;
-
-    if (this.wait === false && this.send === undefined) {
-      throw `jsynchronize requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmittied to connected clients.\nUse syncedVariable.$ync(websocket) to add a websocket to connected clients.\nYou can also pass in as an option {send: () => {}} to jsynchronous()`;
-    }
-
-    this.start = new Date().getTime();
-
-    if (this.rewind === true && this.wait === false) {
-      this.rewindInitial = this.describe();
+    if (this.wait === false) {
+      this.start_sync();
     }
   }
   info() {
-    return {
+    return information =  {
       wait: this.wait,
       name: this.name,
       startTime: this.startTime,
@@ -403,15 +406,7 @@ class JSynchronous {
       client_history: this.client_history,
       history_limit: this.history_limit,
       history_length: this.history.length,
-
-      reserved_words: {
-        $ync: this.jsyncReservedWord,
-        $onmessage: this.onmessageReservedWord,
-        $unsync: this.unsyncReservedWord,
-        $tart: this.startsyncReservedWord,
-        $listeners: this.listenersReservedWord,
-        $info: this.infoReservedWord
-      },
+      reserved_words: Object.keys(this.reserved),
       listeners: this.listeners
     }
   }
@@ -488,22 +483,38 @@ class JSynchronous {
   }
   start_sync(jsync) {
     // If the constructor option {wait: true} was passed, starts sending packets to connected clients. 
-    if (this.send === undefined) {
-      throw `jsynchronize requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmittied to connected clients.\nUse syncedVariable.$ync(websocket) to add a websocket to connected clients.\nYou can also pass in as an option {send: () => {}} to jsynchronous()`;
+    if (this.send === undefined && this.listeners.length > 0) {
+      throw `Jsynchronous requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmittied to connected clients.\nUse syncedVariable.$ync(websocket) to add a websocket to connected clients.\nYou can also pass in as an option {send: () => {}} to jsynchronous()`;
     }
 
-    if (wait === true) {
+    if (this.started === true) {
+      throw `Jsynchronous variable ${this.name} already started`
+    }
+
+    if (this.started !== true) {
+      this.started = true;
+      this.wait = false;
       this.start = new Date().getTime();
-      this.rewindInitial = this.describe();
       this.listeners.forEach((websocket) => {
         this.sendInitial(websocket);
       });
-      this.wait = false;
+
+      if (this.rewind === true) {
+        this.rewindInitial = this.describe();
+      }
     }
   }
-  j_sync(websocket) {
+  sync(websocket) {
+    if (this.send === undefined) {
+      throw `Jsynchronous requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmittied to connected clients.\nYou can also pass in as an option {send: () => {}} to jsynchronous()`;
+    }
+
+    if (websocket === undefined) {
+      throw "$ync(websocket) requires websocket to be defined as a unique identifier for a client. Either an object, a string, or number.";
+    }
+
     if (Array.isArray(websocket)) {
-      websocket.forEach(ws => this.j_sync(ws));
+      websocket.forEach(ws => this.sync(ws));
     } else {
       // Adds the websocket client to a list of websockets to call send(websocket, data) to
       const index = this.listeners.indexOf(websocket);
@@ -528,7 +539,7 @@ class JSynchronous {
       throw 'jsynchronous Error in .unsync(websocket), no websocket registered that matches ' + websocket;
     }
   }
-  on_message() {
+  on_message(data) {
   }
   snapshot(name) {
     new Snapshot(this, name);
@@ -550,7 +561,7 @@ class JSynchronous {
       settings
     ]
 
-    const variables = recurse(this.root, true);
+    const variables = recurse(this.root.proxy, true);
 
     fullState.push(variables.map((v) => {
       const syncedObject = v[jsynchronous.reserved_property];
@@ -571,10 +582,73 @@ class JSynchronous {
 // ----------------------------------------------------------------
 function jsynchronous(initial, options) {
   let jsync = new JSynchronous(initial, options);
-  return jsync.root;
+  return jsync.root.proxy;
 }
 
 jsynchronous.reserved_property = '__jsynchronous__'; 
+
+jsynchronous.onmessage = (websocket, data) => {
+  if (data === undefined) {
+    throw "Jsynchronous onmessage - Server side jsynchronous.onmessage has two arguments: (websocket, data)";
+  }
+
+  // TODO: throttle noisy websockets here. Add throttling to each error below
+
+
+  if (data.length > 256) {  // Magic number? Whats the max message size we can assume a DDOS?
+    return;
+  }
+
+
+  try {  // I hear try/catch blocks aren't performant. Maybe better to refactor for DDOS protection?
+    let json = JSON.parse(data);
+    let op = getOp(json[0]);
+    let name = json[1];
+    let jsync = syncedNames[name];
+
+    if (jsync) {
+      if (jsync.listeners.indexOf(websocket) !== -1) {
+        try {
+
+
+          if (op === 'handshake') {
+            let rootHash = json[2];
+            let secret = handshake(jsync, websocket, rootHash);
+            jsynchronous.send(websocket, JSON.stringify([OP_ENCODINGS['handshake'], name, secret]));
+          }
+
+
+        } catch (e2) {
+          console.error("Jsynchronous onmessage error from client", e2);
+          jsynchronous.send(websocket, JSON.stringify([OP_ENCODINGS['error'], e2.toString()]));
+        }
+      } else {
+        throw `Client is attempting ${op} doesn't have permissions to the variable '${name};`;
+      }
+    } else {
+      throw `Client ${op} referencing a variable named '${name}' that doesn't exist`;
+    }
+  } catch (e1) {
+    // Don't respond to clients who haven't been .listen() on
+    console.error("Jsynchronous onmessage from unauthorized client", e1);
+  }
+}
+
+function handshake(jsync, websocket, rootHash) {
+  if (jsync.secrets.has(websocket)) {
+    throw `Client has already been assigned a secret`;
+  }
+
+  if (rootHash !== jsync.root.hash) {
+    throw `Client doesn't have the correct data to synchronized variable '${jsync.name}'. Got ${rootHash} expected ${jsync.root.hash}`;
+  }
+
+  let secret = randomHash();  // Its okay if hash collisions mean multiple clients share a secret
+
+  jsync.secrets.set(websocket, secret);
+
+  return secret;
+}
 
 module.exports = jsynchronous;
 
@@ -732,7 +806,7 @@ function findRecursively(obj, conditionFunc) {
   }
 }
 function isRoot(syncedObject) {
-  return (syncedObject.jsync.root === syncedObject.proxy);
+  return (syncedObject.jsync.root === syncedObject);
 }
 function flat(value) {
   // Turns variable into its hash, or returns a primitive's value. Expects a syncedObject Proxy if it's an object
@@ -798,4 +872,10 @@ function encodeEnumerable(value) {
     throw `Jsynchronous sanity error - encoding object is referencing a non-synced variable ${value}`;
   }
   return syncedObject.hash;
+}
+function getOp(number) {
+  for (const [key, value] of Object.entries(OP_ENCODINGS)) {
+    if (value === number) return key;
+  }
+  throw "No operation corresponding to the number " + number;
 }
