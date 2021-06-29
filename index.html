@@ -11,8 +11,12 @@
   var $ynced = jsynchronous('', 'array');
 
   socket.on('msg', function (a, b, c) {
-    jsynchronous.onmessage(a);
-    console.log(a);
+    if (Math.random() > 0.1) {
+      console.log(a);
+      jsynchronous.onmessage(a);
+    } else {
+      console.log("Packet dropped");
+    }
     //console.log(jsynchronous());
     document.body.innerHTML = JSON.stringify(jsynchronous());
   });

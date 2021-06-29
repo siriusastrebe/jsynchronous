@@ -8,10 +8,72 @@ const app = express();
 const port = 3000;
 
 
+const arr = [
+  {name: 'duck'},
+  "what's up",
+  {name: 'strawberry'},
+  {name: 'beef'}
+]
+arr[5] = 'Goat';
+
+const $ynced = jsynchronous(arr, {rewind: true});
+
+//var reference = $ynced[6]
+
+let snapshots = 0;
+let a = 0;
+setInterval(() => {
+  $ynced.push(a++);
+}, 400);
+
+
+setTimeout(() => {
+  $ynced.$napshot('THOR');
+}, 12000);
 
 
 
 
+
+// Express
+const server = app.listen(port, () => {
+  console.log(`Example app listening at http://localhost:${port}`);
+})
+
+// Jsynchronous
+jsynchronous.send = (websocket, data) => {
+  websocket.emit('msg', data);
+  console.log('☐', data.length);
+}
+
+console.log($ynced.$info());
+
+// Socket.io
+const { Server } = require("socket.io");
+const io = new Server(server);
+
+io.on('connection', (socket) => {
+  socket.emit('hello', {contents: 'world'});
+  $ynced.$ync(socket);  
+
+  socket.on('msg', (data) => {
+    console.log(data);
+    jsynchronous.onmessage(socket, data)
+  });
+
+  socket.on('disconnect', function() {
+    $ynced.$unsync(socket);
+  });
+});
+
+
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/index.html');
+})
+
+app.get('/jsynchronous-client.js', (req, res) => {
+  res.sendFile(__dirname + '/jsynchronous-client.js');
+})
 
 
 //const arr = [];
@@ -26,14 +88,6 @@ const port = 3000;
 //  childrenStructs: {},
 //}
 //
-const arr = [
-  {name: 'duck'},
-  0,
-  7,
-  "what's up",
-  {name: 'strawberry'},
-  {name: 'beef'}
-]
 
 //arr.forEach((a) => {
 //  console.log(a.name);
@@ -44,24 +98,6 @@ const arr = [
 //arr.filter(() => {
 //});
 //
-
-const $ynced = jsynchronous(arr, {rewind: true});
-
-//var reference = $ynced[6]
-
-let snapshots = 0;
-setInterval(() => {
-  $ynced.push(Math.random().toFixed(2));
-}, 5000);
-
-
-setTimeout(() => {
-  $ynced.$napshot('THOR');
-}, 12000);
-
-
-
-
 
 // Basic deletion
 //const obj = {a: 'a', b: {z: 'z'}}
@@ -90,66 +126,24 @@ setTimeout(() => {
 //}, 5000);
 
 
-// Express
-const server = app.listen(port, () => {
-  console.log(`Example app listening at http://localhost:${port}`);
-})
-
-// Jsynchronous
-jsynchronous.send = (websocket, data) => {
-  websocket.emit('msg', data);
-  console.log('☐', data.length);
-}
-
-// Socket.io
-const { Server } = require("socket.io");
-const io = new Server(server);
-
-io.on('connection', (socket) => {
-  socket.emit('hello', {contents: 'world'});
-  $ynced.$ync(socket);  
-
-  socket.on('msg', (data) => jsynchronous.onmessage(socket, data));
-
-  socket.on('disconnect', function() {
-    $ynced.$unsync(socket);
-  });
-});
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
 //function everything() {
-const a = {
-  string: '$†®îñG',
-  integer: 123467890,
-  floating: 3.141592653589793,
-  bigint: BigInt('9999999999999999999999999'),
-  null: null,
-  undefined: undefined,
-  bool1: true,
-  bool2: false,
-  array: [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233],
-  deep: {a: {very: {deeply: {nested: {data: ['structure']}}}}},
-  circular: [[[]]]
-}
-a.circular[0][0][0] = a;
+//const a = {
+//  string: '$†®îñG',
+//  integer: 123467890,
+//  floating: 3.141592653589793,
+//  bigint: BigInt('9999999999999999999999999'),
+//  null: null,
+//  undefined: undefined,
+//  bool1: true,
+//  bool2: false,
+//  array: [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233],
+//  deep: {a: {very: {deeply: {nested: {data: ['structure']}}}}},
+//  circular: [[[]]]
+//}
+//a.circular[0][0][0] = a;
 //  return a;
 //}
 //
@@ -332,13 +326,4 @@ gameState['extra'].push(Math.random());
 
 // synced = [{hidden: gameState}];
 // gameState.ball.position.z = synced
-
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/index.html');
-})
-
-app.get('/jsynchronous-client.js', (req, res) => {
-  res.sendFile(__dirname + '/jsynchronous-client.js');
-})
-
 

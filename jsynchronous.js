@@ -322,7 +322,7 @@ class JSynchronous {
     options = options || {}
 
     this.name = options.name || '';
-    this.startTime = undefined;
+    this.startTime = 'Not yet started';
     this.objects = {};
     this.listeners = [];
     this.secrets = new Map(); // Secrets key->value corresponds to listener->secretHash;
@@ -379,7 +379,7 @@ class JSynchronous {
       throw `Cannot synchronize a variable that references an already synchronized variable`;
     }
 
-    if (this.name.length > 192) {
+    if (this.name.length > 127) {
       throw `Jsynchronous name is too long. Shorter names are better for efficient networking`;
     }
     if (syncedNames[this.name]) {
@@ -396,7 +396,7 @@ class JSynchronous {
     }
   }
   info() {
-    return information =  {
+    return {
       wait: this.wait,
       name: this.name,
       startTime: this.startTime,
@@ -539,10 +539,51 @@ class JSynchronous {
       throw 'jsynchronous Error in .unsync(websocket), no websocket registered that matches ' + websocket;
     }
   }
-  on_message(data) {
-  }
   snapshot(name) {
     new Snapshot(this, name);
+  }
+  on_message(op, websocket, json) {
+    try {
+      if (op === 'handshake') {
+        let rootHash = json[2];
+        this.handshake(websocket, rootHash);
+      } else if (op === 'resync') {
+console.log('Resyncing client');
+        this.resync(websocket, json);
+      }
+    } catch (e2) {
+      console.error("Jsynchronous onmessage error from client", e2);
+      jsynchronous.send(websocket, JSON.stringify([OP_ENCODINGS['error'], e2.toString()]));
+    }
+  }
+  handshake(websocket, rootHash) {
+    if (this.secrets.has(websocket)) {
+      throw `Client has already been assigned a secret`;
+    }
+    if (rootHash !== this.root.hash) {
+      throw `Client has incorrect data to synchronized variable '${this.name}'. Got ${rootHash} expected ${this.root.hash}`;
+    }
+
+    let secret = randomHash();  // Its okay if hash collisions mean multiple clients share a secret
+    this.secrets.set(websocket, secret);
+    this.send(websocket, JSON.stringify([OP_ENCODINGS['handshake'], this.name, secret]));
+  }
+  resync(websocket, json) {
+    let secret = json[2];
+    let min = json[3];
+    let max = json[4];
+    let historyMin = binarySearch(this.history, (h) => h.id - min);
+    let historyMax = historyMin + (max-min);
+    if (historyMin === -1 || historyMax >= this.history.length) {
+      // TODO: Hard reset on client
+      let payload = [OP_ENCODINGS['error'], 'Unable to resync'];
+      jsynchronous.send(websocket, JSON.stringify(payload));
+    } else {
+      let slice = this.history.slice(historyMin, historyMax);
+      let encoded = slice.map((h) => h.encode());
+      let payload = [OP_ENCODINGS['changes'], this.name, min, max-1, encoded];
+      this.send(websocket, JSON.stringify(payload));
+    }
   }
   describe() {
     if (this.cachedDescription && this.cachedDescription[2] === this.counter) {
@@ -587,6 +628,9 @@ function jsynchronous(initial, options) {
 
 jsynchronous.reserved_property = '__jsynchronous__'; 
 
+// ----------------------------------------------------------------
+// Client->Server communication
+// ----------------------------------------------------------------
 jsynchronous.onmessage = (websocket, data) => {
   if (data === undefined) {
     throw "Jsynchronous onmessage - Server side jsynchronous.onmessage has two arguments: (websocket, data)";
@@ -608,20 +652,7 @@ jsynchronous.onmessage = (websocket, data) => {
 
     if (jsync) {
       if (jsync.listeners.indexOf(websocket) !== -1) {
-        try {
-
-
-          if (op === 'handshake') {
-            let rootHash = json[2];
-            let secret = handshake(jsync, websocket, rootHash);
-            jsynchronous.send(websocket, JSON.stringify([OP_ENCODINGS['handshake'], name, secret]));
-          }
-
-
-        } catch (e2) {
-          console.error("Jsynchronous onmessage error from client", e2);
-          jsynchronous.send(websocket, JSON.stringify([OP_ENCODINGS['error'], e2.toString()]));
-        }
+        jsync.on_message(op, websocket, json);
       } else {
         throw `Client is attempting ${op} doesn't have permissions to the variable '${name};`;
       }
@@ -632,22 +663,6 @@ jsynchronous.onmessage = (websocket, data) => {
     // Don't respond to clients who haven't been .listen() on
     console.error("Jsynchronous onmessage from unauthorized client", e1);
   }
-}
-
-function handshake(jsync, websocket, rootHash) {
-  if (jsync.secrets.has(websocket)) {
-    throw `Client has already been assigned a secret`;
-  }
-
-  if (rootHash !== jsync.root.hash) {
-    throw `Client doesn't have the correct data to synchronized variable '${jsync.name}'. Got ${rootHash} expected ${jsync.root.hash}`;
-  }
-
-  let secret = randomHash();  // Its okay if hash collisions mean multiple clients share a secret
-
-  jsync.secrets.set(websocket, secret);
-
-  return secret;
 }
 
 module.exports = jsynchronous;
@@ -667,14 +682,14 @@ function randomHash() {
   // Returns a 0-9a-f string between 9-12 characters in length
   return Math.random().toString(36).substring(2, 10);
 }
-function binarySearch(sortedArray, key){
+function binarySearch(sortedArray, compareFunc){
   let start = 0;
   let end = sortedArray.length - 1;
   while (start <= end) {
     let middle = Math.floor((start + end) / 2);
-    if (sortedArray[middle] === key) {
+    if (compareFunc(sortedArray[middle]) === 0) {
       return middle;
-    } else if (sortedArray[middle] < key) {
+    } else if (compareFunc(sortedArray[middle]) < 0) {
       start = middle + 1;
     } else {
       end = middle - 1;
@@ -832,7 +847,7 @@ function labelEmpty(source, target) {
     const value = source[i];
     if (value === undefined) {
       allKeys = allKeys || Object.keys(source).map(k => Number(k));
-      if (binarySearch(allKeys, i) === -1) { 
+      if (binarySearch(allKeys, ((a) => a - i)) === -1) { 
         target[i] = [TYPE_ENCODINGS['empty']];
       }
     }
