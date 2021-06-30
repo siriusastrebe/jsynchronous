@@ -330,6 +330,7 @@ class JSynchronous {
     this.send = (websocket, data) => { (options.send || jsynchronous.send)(websocket, data) };
     this.buffer_time = options.buffer_time || 0;
     this.rewind = options.rewind || false;
+    this.one_way = options.one_way;
     this.client_history = options.client_history || 0;
     this.history_limit = options.history_limit || 100000;
     this.wait = true;  // Ignore Proxy setters during inital setup
@@ -403,6 +404,7 @@ class JSynchronous {
       counter: this.counter,
       buffer_time: this.buffer_time,
       rewind: this.rewind,
+      one_way: this.one_way,
       client_history: this.client_history,
       history_limit: this.history_limit,
       history_length: this.history.length,
@@ -590,10 +592,11 @@ console.log('Resyncing client');
       return this.cachedDescription
     }
 
-    const settings = {
-      rewind: this.rewind,
-      client_history: this.client_history > 0 ? this.client_history : undefined,
-    }
+    const settings = {}
+
+    if (this.one_way) settings.one_way = true;
+    if (this.rewind) settings.rewind = true;
+    if (this.client_history) settings.client_history = true;
 
     const fullState = [
       OP_ENCODINGS['initial'],

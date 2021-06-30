@@ -8,32 +8,20 @@ const app = express();
 const port = 3000;
 
 
-const arr = [
-  {name: 'duck'},
-  "what's up",
-  {name: 'strawberry'},
-  {name: 'beef'}
-]
-arr[5] = 'Goat';
+//const physics = {velocity: {x: 5, y: 1.01}};
+//const $ynchronized = jsynchronous(physics, {one_way: true});
 
-const $ynced = jsynchronous(arr, {rewind: true});
+//setInterval(() => {
+//  $ynchronized.velocity.x += 5;
+//  $ynchronized.velocity.y -= 9.81;
+//}, 600);
 
-//var reference = $ynced[6]
 
-let snapshots = 0;
-let a = 0;
+const $ynchronized = jsynchronous([], {one_way: true, rewind: true});
+
 setInterval(() => {
-  $ynced.push(a++);
-}, 400);
-
-
-setTimeout(() => {
-  $ynced.$napshot('THOR');
-}, 12000);
-
-
-
-
+  $ynchronized.push($ynchronized.length);
+}, 600);
 
 // Express
 const server = app.listen(port, () => {
@@ -46,7 +34,7 @@ jsynchronous.send = (websocket, data) => {
   console.log('☐', data.length);
 }
 
-console.log($ynced.$info());
+console.log($ynchronized.$info());
 
 // Socket.io
 const { Server } = require("socket.io");
@@ -54,7 +42,7 @@ const io = new Server(server);
 
 io.on('connection', (socket) => {
   socket.emit('hello', {contents: 'world'});
-  $ynced.$ync(socket);  
+  $ynchronized.$ync(socket);  
 
   socket.on('msg', (data) => {
     console.log(data);
@@ -62,7 +50,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', function() {
-    $ynced.$unsync(socket);
+    $ynchronized.$unsync(socket);
   });
 });
 

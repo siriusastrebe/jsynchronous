@@ -52,7 +52,6 @@ function jsynchronousSetup() {
       processChanges(minCounter, maxCounter, changes, jsync);
     } else if (op === 'handshake') {
       var secret = json[2];
-console.log('Handshaking', secret);
       var jsync = jsyncs[name];
       if (jsync === undefined) {
         throw "JSynchronous server handshake for unknown variable with name '" + name + "'";
@@ -94,6 +93,7 @@ console.log('Handshaking', secret);
       changesEvents: [],
       standIn: standIn || false,
       rewind: settings.rewind || false,
+      one_way: settings.one_way || false,
       client_history: settings.client_history || false,
       history: [],
       secret: undefined,
@@ -116,11 +116,10 @@ console.log('Handshaking', secret);
 
   function newJsynchronous(name, counter, settings, data) {
     var rootType = TYPE_ENCODINGS[data[0][1]];
-    var rewound = settings.rewound === true;
 
     var jsync = jsyncObject(name, counter, settings);
 
-    if (jsyncs[name] && rootType === detailedType(jsyncs[name].root.variable) && !rewound) {
+    if (jsyncs[name] && rootType === detailedType(jsyncs[name].root.variable) && !jsync.rewound) {
       jsync.root = jsyncs[name].root;  // If init is called multiple times, just update the original
     }
 
@@ -147,11 +146,13 @@ console.log('Handshaking', secret);
       }
     }
 
-    if (rewound !== true) {
+    if (jsync.rewound !== true) {
       jsyncs[name] = jsync;
 
-      var rootHash = data[0][0];
-      handshake(jsync, rootHash);
+      if (jsync.one_way !== true) {
+        var rootHash = data[0][0];
+        handshake(jsync, rootHash);
+      }
     }
 
     return jsync;
@@ -218,8 +219,6 @@ console.log('Handshaking', secret);
       children: {}     // key->value corresponds to childHash->{details: child, props: []}
     }
 
-console.log('exists', existing);
-
     if (existing && detailedType(existing.variable) === type) {
       strip(existing.variable);  // Start variable fresh
       details.variable = existing.variable;  // If init is called multiple times, update the original references
@@ -268,114 +267,126 @@ console.log('exists', existing);
   }
 
   function processChanges(minCounter, maxCounter, changes, jsync) {
-
     if (minCounter < jsync.counter) {
       throw "Jsynchronous duplicate receipt of changes, expected " + jsync.counter + ", got " + jsync.minCounter;
     } else if (minCounter > jsync.counter) {
-      if (jsynchronous.send === undefined) {
-        throw "Jsynchronous client is out of sync, unable to resynchronize without a user-specified jsynchronous.send = (data) => {} function";
-      }
-
-      if (jsync.secret === undefined) {
-        throw "Jsynchronous is out of sync, cannot resync without a successful handshake";
-      }
-
-      if (jsync.secret
-          && (jsync.resyncs.length === 0
-           || new Date() - jsync.resyncs[jsync.resyncs.length-1].t > 8000
-           || Object.keys(jsync.storedChanges).length === 0)) {
-        console.warn("Jsynchronous client is out of sync. On counter " + jsync.counter + " got " + minCounter + ". Initiaing resync");
-
-        var payload = [OP_ENCODINGS.indexOf('resync'), jsync.name, jsync.secret, jsync.counter, minCounter];
-        jsynchronous.send(JSON.stringify(payload));
-        jsync.resyncs.push({t: new Date(), min: minCounter, max: jsync.counter});
-      }
-
-      jsync.storedChanges[minCounter] = {
-        min: minCounter,
-        max: maxCounter,
-        changes: changes,
-      }
-    } else {
-      jsync.counter = maxCounter+1;
-
-      var changesTriggered = [];
-
-      for (var i=0; i<changes.length; i++) {
-        var change = changes[i];
-        var op = OP_ENCODINGS[change[0]];
-        var hash = change[1];
-        var details;
-        var pt;
-
-        if (op === 'set' || op === 'delete' || op === 'end') {
-          details = jsync.objects[hash];
-          if (details === undefined) {
-            throw "Jsynchronous error - " + op + " for an object hash " + hash + " that is not registered with the synchronized variable by name '" + jsync.name + "'";
-          }
+      if (jsync.one_way !== true) {
+        if (jsynchronous.send === undefined) {
+          throw "Jsynchronous client is out of sync, unable to resynchronize without a user-specified jsynchronous.send = (data) => {} function";
         }
-
-        if (op === 'set') {
-          var prop = change[2];
-          var newDetails = change[3];
-          var oldDetails = change[4];
-          set(details, prop, newDetails, oldDetails, jsync);
-        } else if (op === 'delete') {
-          var prop = change[2];        
-          var oldDetails =  change[4];
-          del(details, prop, oldDetails, jsync);
-        } else if (op === 'new') {
-          var type = change[2];
-          var each = change[3];
-          createSyncedVariable(hash, TYPE_ENCODINGS[type], each, jsync); 
-        } else if (op === 'end') {
-          endObject(details, jsync);
-        } else if (op === 'snapshot') {
-          var counter = change[1];
-          var name = change[2];
-          createSnapshot(counter, name, jsync);
-        } else {
-          throw "Jsynchronous error - Unidentified operation coming from server: " + op;
+  
+        if (jsync.secret === undefined) {
+          throw "Jsynchronous is out of sync, cannot resync without a successful handshake";
         }
-
-        if (op === 'set' || op === 'delete') {
-          for (let j=0; j<jsync.changesEvents.length; j++) {
-            var e = jsync.changesEvents[j];
-            if (changesTriggered.indexOf(e) === -1) {  // Don't bother checking changes that are already triggered
-              changesTriggered.push(e);
-            }
-          }
+  
+        if (jsync.secret
+            && (jsync.resyncs.length === 0
+             || new Date() - jsync.resyncs[jsync.resyncs.length-1].t > 8000
+             || Object.keys(jsync.storedChanges).length === 0)) {
+          console.warn("Jsynchronous client is out of sync. On counter " + jsync.counter + " got " + minCounter + ". Initiaing resync");
+  
+          var payload = [OP_ENCODINGS.indexOf('resync'), jsync.name, jsync.secret, jsync.counter, minCounter];
+          jsynchronous.send(JSON.stringify(payload));
+          jsync.resyncs.push({t: new Date(), min: minCounter, max: jsync.counter});
         }
-
-        if (jsync.rewind || jsync.client_history) { 
-          jsync.history.push(change);
+  
+        jsync.storedChanges[minCounter] = {
+          min: minCounter,
+          max: maxCounter,
+          changes: changes,
         }
-      }
+  
+        return // Hold off on applying changes that are too far ahead 
 
-      if (jsync.client_history && jsync.client_history < jsync.history.length) {
-        jsync.history = jsync.history.slice(Math.floor(jsync.history.length / 2));
-      }
-
-      resolveReferences(jsync);
-
-      var stored = jsync.storedChanges[jsync.counter];
-      if (stored) {
-        delete jsync.storedChanges[jsync.counter];
-        processChanges(stored.min, stored.max, stored.changes, jsync);
-
-        counters = Object.keys(jsync.storedChanges)
-        for (var i=0; i<counters.length; i++) {
-          if (Number(counters[i]) < jsync.counter) {
-            delete jsync.storedChanges[counters[i]];
-          }
+      } else if (jsync.rewind || jsync.client_history) {
+        while (jsync.history.length < minCounter) {
+          jsync.history.push(null);
         }
-      }
-
-      for (var i=0; i<changesTriggered.length; i++) {
-        var props = changesTriggered[i].props;
-        triggerChangesEvent(jsync, props, changesTriggered[i].callback);
       }
     }
+
+    jsync.counter = maxCounter+1;
+
+    var changesTriggered = [];
+
+    for (var i=0; i<changes.length; i++) {
+      var change = changes[i];
+
+      if (change === null) continue;
+
+      var op = OP_ENCODINGS[change[0]];
+      var hash = change[1];
+      var details;
+      var pt;
+
+      if (op === 'set' || op === 'delete' || op === 'end') {
+        details = jsync.objects[hash];
+        if (details === undefined) {
+          throw "Jsynchronous error - " + op + " for an object hash " + hash + " that is not registered with the synchronized variable by name '" + jsync.name + "'";
+        }
+      }
+
+      if (op === 'set') {
+        var prop = change[2];
+        var newDetails = change[3];
+        var oldDetails = change[4];
+        set(details, prop, newDetails, oldDetails, jsync);
+      } else if (op === 'delete') {
+        var prop = change[2];        
+        var oldDetails =  change[4];
+        del(details, prop, oldDetails, jsync);
+      } else if (op === 'new') {
+        var type = change[2];
+        var each = change[3];
+        createSyncedVariable(hash, TYPE_ENCODINGS[type], each, jsync); 
+      } else if (op === 'end') {
+        endObject(details, jsync);
+      } else if (op === 'snapshot') {
+        var counter = change[1];
+        var name = change[2];
+        createSnapshot(counter, name, jsync);
+      } else {
+        throw "Jsynchronous error - Unidentified operation coming from server: " + op;
+      }
+
+      if (op === 'set' || op === 'delete') {
+        for (let j=0; j<jsync.changesEvents.length; j++) {
+          var e = jsync.changesEvents[j];
+          if (changesTriggered.indexOf(e) === -1) {  // Don't bother checking changes that are already triggered
+            changesTriggered.push(e);
+          }
+        }
+      }
+
+      if (jsync.rewind || jsync.client_history) { 
+        jsync.history.push(change);
+      }
+    }
+
+    if (jsync.client_history && jsync.client_history < jsync.history.length) {
+      jsync.history = jsync.history.slice(Math.floor(jsync.history.length / 2));
+    }
+
+    resolveReferences(jsync);
+
+    var stored = jsync.storedChanges[jsync.counter];
+    if (stored) {
+      delete jsync.storedChanges[jsync.counter];
+      processChanges(stored.min, stored.max, stored.changes, jsync);
+
+      counters = Object.keys(jsync.storedChanges)
+      for (var i=0; i<counters.length; i++) {
+        if (Number(counters[i]) < jsync.counter) {
+          delete jsync.storedChanges[counters[i]];
+        }
+      }
+    }
+
+    for (var i=0; i<changesTriggered.length; i++) {
+      var props = changesTriggered[i].props;
+      triggerChangesEvent(jsync, props, changesTriggered[i].callback);
+    }
+    
   }
   function set(details, prop, newDetails, oldDetails, jsync) {
     var object = details.variable;
@@ -629,6 +640,7 @@ console.log('exists', existing);
             counter: jsync.counter,
             rewind: jsync.rewind,
             rewound: jsync.rewound === true,
+            one_way: jsync.one_way === true,
             client_history: jsync.client_history,
             history_length: jsync.history.length,
             snapshots: sortedSnapshots(jsync),
