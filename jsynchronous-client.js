@@ -312,7 +312,7 @@ function jsynchronousSetup() {
     for (var i=0; i<changes.length; i++) {
       var change = changes[i];
 
-      if (change === null) continue;
+      if (change === null) { continue }
 
       var op = OP_ENCODINGS[change[0]];
       var hash = change[1];

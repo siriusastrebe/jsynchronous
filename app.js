@@ -17,7 +17,7 @@ const port = 3000;
 //}, 600);
 
 
-const $ynchronized = jsynchronous([], {one_way: true, rewind: true});
+const $ynchronized = jsynchronous([], {rewind: true});
 
 setInterval(() => {
   $ynchronized.push($ynchronized.length);

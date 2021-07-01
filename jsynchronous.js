@@ -550,7 +550,6 @@ class JSynchronous {
         let rootHash = json[2];
         this.handshake(websocket, rootHash);
       } else if (op === 'resync') {
-console.log('Resyncing client');
         this.resync(websocket, json);
       }
     } catch (e2) {
@@ -574,17 +573,22 @@ console.log('Resyncing client');
     let secret = json[2];
     let min = json[3];
     let max = json[4];
-    let historyMin = binarySearch(this.history, (h) => h.id - min);
-    let historyMax = historyMin + (max-min);
-    if (historyMin === -1 || historyMax >= this.history.length) {
-      // TODO: Hard reset on client
-      let payload = [OP_ENCODINGS['error'], 'Unable to resync'];
-      jsynchronous.send(websocket, JSON.stringify(payload));
+    if (this.secrets.get(websocket) === secret) {
+      let historyMin = binarySearch(this.history, (h) => h.id - min);
+      let historyMax = historyMin + (max-min);
+      if (historyMin === -1 || historyMax >= this.history.length) {
+        // TODO: Hard reset on client
+        let payload = [OP_ENCODINGS['error'], 'Unable to resync'];
+        jsynchronous.send(websocket, JSON.stringify(payload));
+      } else {
+        let slice = this.history.slice(historyMin, historyMax);
+        let encoded = slice.map((h) => h.encode());
+        let payload = [OP_ENCODINGS['changes'], this.name, min, max-1, encoded];
+        this.send(websocket, JSON.stringify(payload));
+      }
     } else {
-      let slice = this.history.slice(historyMin, historyMax);
-      let encoded = slice.map((h) => h.encode());
-      let payload = [OP_ENCODINGS['changes'], this.name, min, max-1, encoded];
-      this.send(websocket, JSON.stringify(payload));
+      let payload = [OP_ENCODINGS['error'], 'Secret check failed'];
+      jsynchronous.send(websocket, JSON.stringify(payload));
     }
   }
   describe() {
