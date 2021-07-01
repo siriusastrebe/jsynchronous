@@ -324,8 +324,7 @@ class JSynchronous {
     this.name = options.name || '';
     this.startTime = 'Not yet started';
     this.objects = {};
-    this.listeners = [];
-    this.secrets = new Map(); // Secrets key->value corresponds to listener->secretHash;
+    this.listeners = new Map();
     this.counter = 0;   // counter is always 1 more than the latest change's id.
     this.send = (websocket, data) => { (options.send || jsynchronous.send)(websocket, data) };
     this.buffer_time = options.buffer_time || 0;
@@ -409,7 +408,7 @@ class JSynchronous {
       history_limit: this.history_limit,
       history_length: this.history.length,
       reserved_words: Object.keys(this.reserved),
-      listeners: this.listeners
+      listeners: [ ...this.listeners.keys() ]
     }
   }
   communicate(change) {
@@ -445,9 +444,9 @@ class JSynchronous {
       throw `Jsynchronous sanity error - Attempting to send changes but size of changes doesn't match the final tally. Expected ${changes.length} got ${max - min}`;
     }
 
-    this.listeners.forEach((listener) => {
-      this.send(listener, JSON.stringify([OP_ENCODINGS['changes'], this.name, min, max, changes]));
-    });
+    for (let [websocket, listener] of this.listeners) {
+      this.send(websocket, JSON.stringify([OP_ENCODINGS['changes'], this.name, min, max, changes]));
+    }
 
     // Now that it's sent, the rest is history
     this.queuedCommunications.forEach((c) => {
@@ -485,7 +484,7 @@ class JSynchronous {
   }
   start_sync(jsync) {
     // If the constructor option {wait: true} was passed, starts sending packets to connected clients. 
-    if (this.send === undefined && this.listeners.length > 0) {
+    if (this.send === undefined && this.listeners.size > 0) {
       throw `Jsynchronous requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmittied to connected clients.\nUse syncedVariable.$ync(websocket) to add a websocket to connected clients.\nYou can also pass in as an option {send: () => {}} to jsynchronous()`;
     }
 
@@ -497,9 +496,10 @@ class JSynchronous {
       this.started = true;
       this.wait = false;
       this.start = new Date().getTime();
-      this.listeners.forEach((websocket) => {
+
+      for (let [websocket, listener] of this.listeners) {
         this.sendInitial(websocket);
-      });
+      }
 
       if (this.rewind === true) {
         this.rewindInitial = this.describe();
@@ -519,9 +519,8 @@ class JSynchronous {
       websocket.forEach(ws => this.sync(ws));
     } else {
       // Adds the websocket client to a list of websockets to call send(websocket, data) to
-      const index = this.listeners.indexOf(websocket);
-      if (index === -1) {
-        this.listeners.push(websocket);
+      if (!this.listeners.has(websocket)) {
+        this.listeners.set(websocket, {secret: null, penalty: 0});
       } else {
         // TODO: Change this to a warn?
         throw 'jsynchronous Error in .jsync(websocket), websocket is already being listened on: ' + websocket;
@@ -533,9 +532,8 @@ class JSynchronous {
     }
   }
   un_sync(websocket) {
-    const index = this.listeners.indexOf(websocket);
-    if (index !== -1) {
-      this.listeners.splice(index, 1);
+    if (this.listeners.has(websocket)) {
+      this.listeners.delete(websocket);
     } else {
       // TODO: Change this to a warn?
       throw 'jsynchronous Error in .unsync(websocket), no websocket registered that matches ' + websocket;
@@ -545,16 +543,16 @@ class JSynchronous {
     new Snapshot(this, name);
   }
   on_message(op, websocket, json) {
-    try {
+    try {  // I hear try/catch is unperformant. Maybe refactor for better DDOS protection?
       if (op === 'handshake') {
         let rootHash = json[2];
         this.handshake(websocket, rootHash);
       } else if (op === 'resync') {
         this.resync(websocket, json);
       }
-    } catch (e2) {
-      console.error("Jsynchronous onmessage error from client", e2);
-      jsynchronous.send(websocket, JSON.stringify([OP_ENCODINGS['error'], e2.toString()]));
+    } catch (e) {
+      console.error("Jsynchronous client->server onmessage error", e);
+      jsynchronous.send(websocket, JSON.stringify([OP_ENCODINGS['error'], e.toString()]));
     }
   }
   handshake(websocket, rootHash) {
@@ -587,6 +585,7 @@ class JSynchronous {
         this.send(websocket, JSON.stringify(payload));
       }
     } else {
+      // TODO: Tear this out, we don't need to be polite to clients that fail the secret check
       let payload = [OP_ENCODINGS['error'], 'Secret check failed'];
       jsynchronous.send(websocket, JSON.stringify(payload));
     }
@@ -643,32 +642,39 @@ jsynchronous.onmessage = (websocket, data) => {
     throw "Jsynchronous onmessage - Server side jsynchronous.onmessage has two arguments: (websocket, data)";
   }
 
-  // TODO: throttle noisy websockets here. Add throttling to each error below
-
+  // TODO: throttle noisy websockets here. increase punishment for each error below
 
   if (data.length > 256) {  // Magic number? Whats the max message size we can assume a DDOS?
     return;
   }
 
-
-  try {  // I hear try/catch blocks aren't performant. Maybe better to refactor for DDOS protection?
+  let json;
+  try {
     let json = JSON.parse(data);
+  } catch (e) {
+    console.error("Jsynchronous client->server JSON parse error", e);
+    return;
+  }
+
+  if (json) {
     let op = getOp(json[0]);
     let name = json[1];
     let jsync = syncedNames[name];
 
-    if (jsync) {
-      if (jsync.listeners.indexOf(websocket) !== -1) {
-        jsync.on_message(op, websocket, json);
-      } else {
-        throw `Client is attempting ${op} doesn't have permissions to the variable '${name};`;
-      }
-    } else {
-      throw `Client ${op} referencing a variable named '${name}' that doesn't exist`;
+    if (!op) {
+      console.error(`Jsynchronous client->server message contains an unrecognized op: ${op}`);
+      return;
     }
-  } catch (e1) {
-    // Don't respond to clients who haven't been .listen() on
-    console.error("Jsynchronous onmessage from unauthorized client", e1);
+    if (!jsync) {
+      console.error(`Jsynchronous client->server message references non-existent variable name ${name}`);
+      return;
+    }
+    if (!jsync.listeners.has(websocket)) {
+      console.error(`Client is attempting ${op} isn't registered with $ync() on the variable '${name};`);
+      return;
+    }
+
+    jsync.on_message(op, websocket, json);
   }
 }
 
@@ -899,5 +905,5 @@ function getOp(number) {
   for (const [key, value] of Object.entries(OP_ENCODINGS)) {
     if (value === number) return key;
   }
-  throw "No operation corresponding to the number " + number;
+  return false;
 }

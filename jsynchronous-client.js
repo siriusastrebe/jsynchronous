@@ -89,7 +89,6 @@ function jsynchronousSetup() {
       counter: counter,  // Counter will always be 1 above the last packet
       objects: {},  // key-> value corresponds to details.hash->details
       root: undefined,
-      statefulEvents: [],
       changesEvents: [],
       standIn: standIn || false,
       rewind: settings.rewind || false,
@@ -186,12 +185,6 @@ function jsynchronousSetup() {
 
     if (standIn) {
       // Copy events assigned to standIn while waiting on the synchronized variable
-      for (var i=0; i<standIn.statefulEvents.length; i++) {
-        var e = standIn.statefulEvents[i];
-        if (jsync.statefulEvents.indexOf(e) === -1) {
-          jsync.statefulEvents.push(e);
-        }
-      }
       for (var i=0; i<standIn.changesEvents.length; i++) {
         var e = standIn.changesEvents[i];
         if (jsync.changesEvents.indexOf(e) === -1) {
@@ -307,7 +300,7 @@ function jsynchronousSetup() {
 
     jsync.counter = maxCounter+1;
 
-    var changesTriggered = [];
+    var triggerEvents = false;
 
     for (var i=0; i<changes.length; i++) {
       var change = changes[i];
@@ -350,12 +343,7 @@ function jsynchronousSetup() {
       }
 
       if (op === 'set' || op === 'delete') {
-        for (let j=0; j<jsync.changesEvents.length; j++) {
-          var e = jsync.changesEvents[j];
-          if (changesTriggered.indexOf(e) === -1) {  // Don't bother checking changes that are already triggered
-            changesTriggered.push(e);
-          }
-        }
+        triggerEvents = true;
       }
 
       if (jsync.rewind || jsync.client_history) { 
@@ -382,11 +370,12 @@ function jsynchronousSetup() {
       }
     }
 
-    for (var i=0; i<changesTriggered.length; i++) {
-      var props = changesTriggered[i].props;
-      triggerChangesEvent(jsync, props, changesTriggered[i].callback);
+    if (triggerEvents) {
+      for (let j=0; j<jsync.changesEvents.length; j++) {
+        var e = jsync.changesEvents[j];
+        triggerChanges(jsync, e.callback);
+      }
     }
-    
   }
   function set(details, prop, newDetails, oldDetails, jsync) {
     var object = details.variable;
@@ -412,8 +401,6 @@ function jsynchronousSetup() {
     }
 
     object[prop] = value;
-
-    // return triggerStatefulEvents(details, prop, value, oldValue, jsync);
   }
   function del(details, prop, oldDetails, jsync) {
     var object = details.variable;
@@ -428,8 +415,6 @@ function jsynchronousSetup() {
     }
 
     delete object[prop];
-
-    // return triggerStatefulEvents(details, prop, undefined, oldValue, jsync);
   }
   function endObject(details, jsync) {
     // Memento mori
@@ -616,9 +601,7 @@ function jsynchronousSetup() {
         }
 
         var e = {event: event, props: props, options: options, callback: callback};
-        if (e.event === 'alter') {
-          jsync.statefulEvents.push(e);
-        } else if (e.event === 'changes') {
+        if (e.event === 'changes') {
           jsync.changesEvents.push(e);
         } else {
           throw "Jsynchronous doesn't have an event trigger for event type '" + e.event + "'";
@@ -663,33 +646,18 @@ function jsynchronousSetup() {
     }
   }
 
-  function triggerStatefulEvents(details, prop, value, oldValue, jsync) {
-    for (var j=0; j<jsync.statefulEvents.length; j++) {
-      var e = jsync.statefulEvents[j];
-      var props = e.props;
-      var options  = e.options;
-      var callback = e.callback;
-      var recursive = (options && options.recursive === true);
-
-      if (recursive && jsync.root.descendants[details.hash]) {
-        callback(value, oldValue, propertyTree, details.variable);
-      }
-
-      if (matchesPropertyTree(props, propertyTree, recursive)) {
-        callback(value, oldValue, propertyTree, details.variable);
-      }
-    }
-  }
-
-  function triggerChangesEvent(jsync, props, callback) {
+  function triggerChanges(jsync, callback) {
     var variable = jsync.root.variable;
-    if (props) {
-      // Provide the callback with variable relative to the properties they listed
-      for (let j=0; j<props.length; j++) {
-        variable = variable[props[j]];
-      }
-    }
     callback(variable);
+
+//    // Provide the callback with variable relative to the properties they listed
+//    if (props) {
+//      
+//      for (let j=0; j<props.length; j++) {
+//        variable = variable[props[j]];
+//      }
+//    }
+
   }
 
   // ----------------------------------------------------------------
