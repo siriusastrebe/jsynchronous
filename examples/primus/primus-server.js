@@ -18,7 +18,7 @@ setInterval(() => {
 
 // Primus websocket server
 const primus = Primus.createServer(function connection(spark) {
-  physics.$ync(spark);
+  $ynchronized.$ync(spark);
 }, { port: 8080, transformer: 'websockets' });
 
 // Express fileserver

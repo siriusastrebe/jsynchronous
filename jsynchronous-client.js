@@ -61,7 +61,7 @@ function jsynchronousSetup() {
     }
   }
 
-  function get(name, standInType) {
+  function get(standInType, name) {
     var existing;
     if (!name) {
       name = '';
@@ -70,13 +70,13 @@ function jsynchronousSetup() {
     if (jsyncs[name]) {
       return jsyncs[name].root.variable;
     } else if (standInType) {
-      return standInVariable(name, standInType);
+      return standInVariable(standInType, name);
     } else {
-      var errorString = "jsynchronous() error - No synchronized variable available by name " + name + ". ";
+      var errorString = "jsynchronous() error - No synchronized variable available by name '" + name + "'. ";
       if (Object.keys(jsyncs).length === 0) {
         errorString += "Either connection has not been established, or .$sync has not yet been called on the server for this client. ";
       }
-      errorString += "Use jsynchronous(name, 'array') to create a stand-in array or jsynchronous(name, 'object') to create a stand-in object. This stand-in variable will be automatically populated once synchronization succeeds.";
+      errorString += "Use jsynchronous('array', name) to create a stand-in array or jsynchronous('object', name) to create a stand-in object. This stand-in variable will be automatically populated once synchronization succeeds.";
       throw errorString;
     }
   }
@@ -160,11 +160,18 @@ function jsynchronousSetup() {
     return jsync;
   }
 
-  function standInVariable(name, type) {
+  function standInVariable(type, name) {
     if (standIns[name]) {
       return standIns[name].variable;
     } else {
       standIns[name] = jsyncObject(undefined, -1, {}, true);
+
+      if (typeof type === 'array') {
+        type = 'array';
+      } else if (typeof type === 'object') {
+        type = 'object';
+      }
+
       standIns[name].variable = newCollection(type);
       addSynchronizedVariableMethods(standIns[name], standIns[name].variable);
       return standIns[name].variable;
@@ -178,11 +185,10 @@ function jsynchronousSetup() {
       if (standIns[name]) {
         standIn = standIns[name];
       }
-      var standInType = detailedType(standIn.variable)
 
-      if (standIn && standInType !== type) {
+      if (standIn && detailedType(standIn.variable) !== type) {
         standIn = undefined;
-        console.error("jsynchronous('" + name + "', '" + standInType + "') is the wrong variable type, the type originating from the server is '" + type + "'. Your stand-in variable is unable to reference the synchronized variable.")
+        console.error("jsynchronous('" + detailedType(standIn.variable) + ", '" + name + "') is the wrong variable type, the type originating from the server is '" + type + "'. Your stand-in variable is unable to reference the synchronized variable.")
       }
     }
 
@@ -261,8 +267,6 @@ function jsynchronousSetup() {
     }
     jsync.staging.references.length = 0;
   }
-
-
 
 
   function processChanges(minCounter, maxCounter, changes, jsync) {
@@ -725,7 +729,6 @@ function jsynchronousSetup() {
   // Entry point
   // ----------------------------------------------------------------
   jsynchronous = get;
-  jsynchronous.get = get;
   jsynchronous.onmessage = onmessage;
   jsynchronous.list = list;
 }

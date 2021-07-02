@@ -317,11 +317,11 @@ class SyncedObject {
 class JSynchronous {
   // JSynchronous handles a group of proxied objects starting at the root.
   // all of the socket communication and authentication is handled through JSynchronous
-  constructor(initial, options) {
+  constructor(initial, name, options) {
     initial = initial || {}
     options = options || {}
 
-    this.name = options.name || '';
+    this.name = name || '';
     this.startTime = 'Not yet started';
     this.objects = {};
     this.listeners = new Map();
@@ -625,8 +625,8 @@ class JSynchronous {
 // ----------------------------------------------------------------
 // Entrypoint into the jsynchronous library
 // ----------------------------------------------------------------
-function jsynchronous(initial, options) {
-  let jsync = new JSynchronous(initial, options);
+function jsynchronous(initial, name, options) {
+  let jsync = new JSynchronous(initial, name, options);
   return jsync.root.proxy;
 }
 

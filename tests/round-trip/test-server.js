@@ -9,7 +9,7 @@ jsynchronous.send = (websocket, data) => {
 }
 
 const $erved = jsynchronous({});
-const $relay = jsynclient(null, 'object');
+const $relay = jsynclient('object');
 
 // Jsync server setup
 const wss = new WebSocket.Server({ port: 8080 });

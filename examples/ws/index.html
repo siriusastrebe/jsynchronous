@@ -3,7 +3,7 @@
 <script>
   const ws = new WebSocket('ws://localhost:8080');
 
-  $ynced = jsynchronous('physics', 'object');
+  $ynced = jsynchronous('object', 'physics');
 
   ws.onopen = function open() {
     console.log('connected');

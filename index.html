@@ -8,7 +8,7 @@
     socket.emit('msg', data);
   }
 
-  var $ynced = jsynchronous('', 'array');
+  var $ynced = jsynchronous('array', '');
 
   socket.on('msg', function (a, b, c) {
     if (Math.random() > 0.1) {

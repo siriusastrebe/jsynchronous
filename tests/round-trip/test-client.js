@@ -9,7 +9,7 @@ jsynchronous.send = (websocket, data) => {
   websocket.send(data);
 }
 
-const $erved = jsynclient(null, 'object');
+const $erved = jsynclient('object');
 const $relay = jsynchronous({});
 
 

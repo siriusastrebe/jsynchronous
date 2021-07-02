@@ -10,7 +10,7 @@ jsynchronous.send = (websocket, data) => {
 }
 
 const physics = {velocity: {x: 5, y: -2.04}};
-const $ynchronized = jsynchronous(physics, {name: 'physics'});
+const $ynchronized = jsynchronous(physics, 'physics');
 
 setInterval(() => {
   $ynchronized.velocity.x += 5;
@@ -22,7 +22,12 @@ wss.on('connection', function connection(ws) {
     console.log('received: %s', message);
   });
 
+
   $ynchronized.$ync(ws);
+
+  ws.on('close', function close() {
+    $ynchronized.$unsync(ws);
+  });
 });
 
 // Express fileserver

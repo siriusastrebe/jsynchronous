@@ -3,7 +3,7 @@
 <script src="/primus/primus.js"></script>
 <script>
   const primus = Primus('ws://localhost:8080', {protocol: 'ws:', port: 8080});
-  const $ynced = jsynchronous('', 'object');
+  const $ynced = jsynchronous('object');
 
   primus.on('data', function message(data) {
     jsynchronous.onmessage(data);
