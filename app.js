@@ -21,6 +21,12 @@ const $ynchronized = jsynchronous([], {rewind: true});
 
 setInterval(() => {
   $ynchronized.push($ynchronized.length);
+  if (Math.random() > 0.5) {
+    $ynchronized.push($ynchronized.length);
+  }
+  if (Math.random() > 0.5) {
+    $ynchronized.push($ynchronized.length);
+  }
 }, 600);
 
 // Express
@@ -45,7 +51,6 @@ io.on('connection', (socket) => {
   $ynchronized.$ync(socket);  
 
   socket.on('msg', (data) => {
-    console.log(data);
     jsynchronous.onmessage(socket, data)
   });
 

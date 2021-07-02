@@ -520,7 +520,7 @@ class JSynchronous {
     } else {
       // Adds the websocket client to a list of websockets to call send(websocket, data) to
       if (!this.listeners.has(websocket)) {
-        this.listeners.set(websocket, {secret: null, penalty: 0});
+        this.listeners.set(websocket, {secret: null, penalty: 0, lastMessage: 0});
       } else {
         // TODO: Change this to a warn?
         throw 'jsynchronous Error in .jsync(websocket), websocket is already being listened on: ' + websocket;
@@ -542,36 +542,34 @@ class JSynchronous {
   snapshot(name) {
     new Snapshot(this, name);
   }
-  on_message(op, websocket, json) {
-    try {  // I hear try/catch is unperformant. Maybe refactor for better DDOS protection?
+  on_message(op, websocket, listener, json) {
+    try {
       if (op === 'handshake') {
         let rootHash = json[2];
-        this.handshake(websocket, rootHash);
+        this.handshake(websocket, listener, rootHash);
       } else if (op === 'resync') {
-        this.resync(websocket, json);
+        this.resync(websocket, listener, json);
       }
     } catch (e) {
+      listener.penalty += 5;  // Penalize clients heavily if they trigger errors
       console.error("Jsynchronous client->server onmessage error", e);
       jsynchronous.send(websocket, JSON.stringify([OP_ENCODINGS['error'], e.toString()]));
     }
   }
-  handshake(websocket, rootHash) {
-    if (this.secrets.has(websocket)) {
-      throw `Client has already been assigned a secret`;
-    }
+  handshake(websocket, listener, rootHash) {
     if (rootHash !== this.root.hash) {
       throw `Client has incorrect data to synchronized variable '${this.name}'. Got ${rootHash} expected ${this.root.hash}`;
     }
 
-    let secret = randomHash();  // Its okay if hash collisions mean multiple clients share a secret
-    this.secrets.set(websocket, secret);
+    let secret = listener.secret || randomHash();  // no need to worry about collisions. Secrets aren't shared.
+    listener.secret = secret;
     this.send(websocket, JSON.stringify([OP_ENCODINGS['handshake'], this.name, secret]));
   }
-  resync(websocket, json) {
+  resync(websocket, listener, json) {
     let secret = json[2];
     let min = json[3];
     let max = json[4];
-    if (this.secrets.get(websocket) === secret) {
+    if (listener.secret === secret) {
       let historyMin = binarySearch(this.history, (h) => h.id - min);
       let historyMax = historyMin + (max-min);
       if (historyMin === -1 || historyMax >= this.history.length) {
@@ -650,7 +648,7 @@ jsynchronous.onmessage = (websocket, data) => {
 
   let json;
   try {
-    let json = JSON.parse(data);
+    json = JSON.parse(data);
   } catch (e) {
     console.error("Jsynchronous client->server JSON parse error", e);
     return;
@@ -670,11 +668,29 @@ jsynchronous.onmessage = (websocket, data) => {
       return;
     }
     if (!jsync.listeners.has(websocket)) {
-      console.error(`Client is attempting ${op} isn't registered with $ync() on the variable '${name};`);
+      console.error(`Jsynchronous client is attempting ${op} isn't registered with $ync() on the variable '${name};`);
       return;
     }
 
-    jsync.on_message(op, websocket, json);
+    // Denial of Service Protection. Limit to 10 messages at a time, decaying by 1 per second
+    let listener = jsync.listeners.get(websocket);
+    listener.penalty = 1 + Math.max(0, listener.penalty - Math.floor((new Date() - listener.lastMessage) / 1000));
+    listener.lastMessage = new Date();
+
+    if (listener.penalty > 10) {
+      listener.penalty += 2;
+      if (jsync.dos === undefined || new Date() - jsync.dos > 60000) {
+        jsync.dos = new Date();
+        setTimeout(() => {
+          console.error(`Jsynchronous Denial of Service detected, dropping client requests. Penalty: ${listener.penalty} seconds`);
+        }, 1000);
+      }
+      return;
+    }
+
+    jsync.on_message(op, websocket, listener, json);
+  } else {
+    console.error(`Jsynchronous client->server onmessage got a malformed piece of json`);
   }
 }
 
