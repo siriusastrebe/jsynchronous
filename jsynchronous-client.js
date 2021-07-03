@@ -724,7 +724,7 @@ function jsynchronousSetup() {
     if (jsynchronous.send === undefined) {
       console.warn("Jsynchronous client hasn't been provided a jsynchronous.send = (data) => {}  function. This jsynchronous client will not be able to re-synchronize in the event of a TCP/IP connection interrupt.");
     } else {
-      communicate('handshake', name, rootHash);
+      communicate('handshake', jsync.name, rootHash);
 
       var defaultTimeout = 2000;
       if (timeout === undefined) {

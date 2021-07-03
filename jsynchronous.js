@@ -714,7 +714,9 @@ jsynchronous.onmessage = (websocket, data) => {
   }
 }
 
-module.exports = jsynchronous;
+if (typeof module === 'object') {
+  module.exports = jsynchronous;
+}
 
 // ----------------------------------------------------------------
 // Helper functions

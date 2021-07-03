@@ -1,0 +1,41 @@
+<html>
+<script src="/socket.io/socket.io.js"></script>
+<script src="/jsynchronous.js"></script>
+<script>
+  const socket = io();
+
+  jsynchronous.send = (s, data) => {
+    socket.emit('msg', data);
+    console.log(`${(data.length/1000).toFixed(2)} kB`);   
+  }
+
+  const physics = {velocity: {x: 5, y: -2.04}};
+  const $ynchronized = jsynchronous(physics);
+
+  setInterval(() => {
+    $ynchronized.velocity.x += 5;
+    $ynchronized.velocity.y -= 9.81;
+    document.body.innerHTML = JSON.stringify($ynchronized);
+  }, 1000);
+
+  socket.on('connect', function (data) {
+    console.log('Connect detected');
+    $ynchronized.$ync(0);  
+  });
+
+
+  socket.on('disconnect', function (data) {
+    $ynchronized.$unsync(0);
+  });
+
+  socket.on('msg', function (data) {
+    jsynchronous.onmessage(0, data);
+    console.log(data);
+    document.body.innerHTML = JSON.stringify($ynchronized);
+  });
+
+
+</script>
+<body>
+</body>
+</html>
