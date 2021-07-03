@@ -166,9 +166,9 @@ function jsynchronousSetup() {
     } else {
       standIns[name] = jsyncObject(undefined, -1, {}, true);
 
-      if (typeof type === 'array') {
+      if (detailedType(type) === 'array') {
         type = 'array';
-      } else if (typeof type === 'object') {
+      } else if (detailedType(type) === 'object') {
         type = 'object';
       }
 

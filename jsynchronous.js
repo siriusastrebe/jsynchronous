@@ -354,10 +354,9 @@ class JSynchronous {
     // Coerce this to refer to this jsynchronous instance
     this.reserved = {}
     this.reserved[this.syncReservedWord]      = ((a) => this.sync(a));
-    this.reserved[this.onmessageReservedWord] = ((a) => this.on_message(a));
     this.reserved[this.unsyncReservedWord]    = ((a) => this.un_sync(a));
     this.reserved[this.startReservedWord]     = ((a) => this.start_sync(a));
-    this.reserved[this.listenersReservedWord] = (() => this.listeners);
+    this.reserved[this.listenersReservedWord] = (() => [ ...this.listeners.keys() ]);
     this.reserved[this.infoReservedWord]      = (() => this.info());
     this.reserved[this.snapshotReservedWord]  = ((a) => this.snapshot(a));
 

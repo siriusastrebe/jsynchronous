@@ -40,8 +40,6 @@ jsynchronous.send = (websocket, data) => {
   console.log('☐', data.length);
 }
 
-console.log($ynchronized.$info());
-
 // Socket.io
 const { Server } = require("socket.io");
 const io = new Server(server);
@@ -53,6 +51,7 @@ io.on('connection', (socket) => {
   socket.on('msg', (data) => {
     jsynchronous.onmessage(socket, data)
   });
+
 
   socket.on('disconnect', function() {
     $ynchronized.$unsync(socket);
