@@ -26,6 +26,12 @@ const OP_ENCODINGS = {
   'error': 9
 }
 
+const clientReservedWords = {
+  '$info': true,
+  '$on': true,
+  '$rewind': true,
+}
+
 const syncedNames = {};
 
 
@@ -338,27 +344,28 @@ class JSynchronous {
     this.snapshots = {};
     this.rewindInitial = undefined;
 
-    // You can reference synchronized variables from other places in your app. Be careful however, when assigning object and arrays to synchronized variables. The ALL of the contents will become visible to the connected clients.
-
-
-
     // These variables are special method names on the root of a synchronized variable. They will throw an error if you reassign these methods, so you can rename these methods by passing them into the options.
-    this.syncReservedWord = options.$ync || '$ync';
-    this.onmessageReservedWord = options.$onmessage || '$onmessage';
-    this.unsyncReservedWord = options.$unsync || '$unsync';
-    this.startReservedWord = options.$tart || '$tart';
-    this.listenersReservedWord = options.$listeners || '$listeners';
-    this.infoReservedWord = options.$info || '$info';
-    this.snapshotReservedWord = options.$napshot || '$napshot';
+    this.defaults = {
+      $ync:       options.$ync       || '$ync',
+      $unsync:    options.$unsync    || '$unsync',
+      $on:        options.$on        || '$on',
+      $tart:      options.$tart      || '$tart',
+      $listeners: options.$listeners || '$listeners',
+      $info:      options.$info      || '$info',
+      $napshot:   options.$napshot   || '$napshot',
+      $rewind:    options.$rewind    || '$rewind'
+    }
 
     // Coerce this to refer to this jsynchronous instance
     this.reserved = {}
-    this.reserved[this.syncReservedWord]      = ((a) => this.sync(a));
-    this.reserved[this.unsyncReservedWord]    = ((a) => this.un_sync(a));
-    this.reserved[this.startReservedWord]     = ((a) => this.start_sync(a));
-    this.reserved[this.listenersReservedWord] = (() => [ ...this.listeners.keys() ]);
-    this.reserved[this.infoReservedWord]      = (() => this.info());
-    this.reserved[this.snapshotReservedWord]  = ((a) => this.snapshot(a));
+    this.reserved[this.defaults['$ync']]       = ((a) => this.sync(a));
+    this.reserved[this.defaults['$unsync']]    = ((a) => this.un_sync(a));
+    this.reserved[this.defaults['$on']]        = ((a) => this.on(a));
+    this.reserved[this.defaults['$tart']]      = ((a) => this.start_sync(a));
+    this.reserved[this.defaults['$listeners']] = (() => [ ...this.listeners.keys() ]);
+    this.reserved[this.defaults['$info']]      = (() => this.info());
+    this.reserved[this.defaults['$napshot']]   = ((a) => this.snapshot(a));
+    this.reserved[this.defaults['$rewind']]    = ((a) => this.snapshot(a));
 
     this.bufferTimeout = undefined;
     this.queuedCommunications = [];
@@ -404,6 +411,7 @@ class JSynchronous {
       rewind: this.rewind,
       one_way: this.one_way,
       client_history: this.client_history,
+      snapshots: Object.values(this.snapshots).sort((a, b) => a.counter - b.counter),
       history_limit: this.history_limit,
       history_length: this.history.length,
       reserved_words: Object.keys(this.reserved),
@@ -541,6 +549,14 @@ class JSynchronous {
   snapshot(name) {
     new Snapshot(this, name);
   }
+  on() {
+    // TODO: Implement sever side events
+    throw 'Server side .$on() events not yet implemented! Stay tuned for this feature in future versions';
+  }
+  rewind() {
+    // TODO: Implement sever side rewind
+    throw 'Server side .$rewind() not yet implemented! Stay tuned for this feature in future versions';
+  }
   on_message(op, websocket, listener, json) {
     try {
       if (op === 'handshake') {
@@ -598,6 +614,13 @@ class JSynchronous {
     if (this.rewind) settings.rewind = true;
     if (this.client_history) settings.client_history = true;
 
+    for (let key in this.defaults) {
+      if (this.defaults[key] !== key && clientReservedWords[key]) {
+        if (settings.reserved === undefined) settings.reserved = {}
+        settings.reserved[key] = this.defaults[key];
+      }
+    }
+
     const fullState = [
       OP_ENCODINGS['initial'],
       this.name,
@@ -638,8 +661,6 @@ jsynchronous.onmessage = (websocket, data) => {
   if (data === undefined) {
     throw "Jsynchronous onmessage - Server side jsynchronous.onmessage has two arguments: (websocket, data)";
   }
-
-  // TODO: throttle noisy websockets here. increase punishment for each error below
 
   if (data.length > 256) {  // Magic number? Whats the max message size we can assume a DDOS?
     return;

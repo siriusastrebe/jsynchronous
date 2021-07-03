@@ -27,6 +27,12 @@ function jsynchronousSetup() {
     'error',
   ]
 
+  var clientReservedWords = {
+    '$info': true,
+    '$on': true,
+    '$rewind': true
+  }
+
   var jsyncs = {}
   var standIns = {}
 
@@ -103,6 +109,7 @@ function jsynchronousSetup() {
         references: []
       },
       storedChanges: [],
+      syncTime: new Date().getTime(),
       resyncing: false,
       resyncs: [],
       backoff: 0,
@@ -118,8 +125,9 @@ function jsynchronousSetup() {
 
   function newJsynchronous(name, counter, settings, data) {
     var rootType = TYPE_ENCODINGS[data[0][1]];
-
     var jsync = jsyncObject(name, counter, settings);
+    var reserved;
+    if (settings) reserved = settings.reserved;
 
     if (jsyncs[name] && rootType === detailedType(jsyncs[name].root.variable) && !jsync.rewound) {
       jsync.root = jsyncs[name].root;  // If init is called multiple times, just update the original
@@ -136,6 +144,8 @@ function jsynchronousSetup() {
         jsync.root = description;
       }
     }
+
+    addSynchronizedVariableMethods(jsync, jsync.root.variable, reserved);
 
     resolveReferences(jsync);
 
@@ -187,8 +197,8 @@ function jsynchronousSetup() {
       }
 
       if (standIn && detailedType(standIn.variable) !== type) {
-        standIn = undefined;
         console.error("jsynchronous('" + detailedType(standIn.variable) + ", '" + name + "') is the wrong variable type, the type originating from the server is '" + type + "'. Your stand-in variable is unable to reference the synchronized variable.")
+        standIn = undefined;
       }
     }
 
@@ -228,10 +238,6 @@ function jsynchronousSetup() {
       details.variable = standIn.variable;
     } else {
       details.variable = newCollection(type);
-    }
-
-    if (isRoot) {
-      addSynchronizedVariableMethods(jsync, details.variable);
     }
 
     jsync.objects[hash] = details;
@@ -604,10 +610,21 @@ function jsynchronousSetup() {
     }
   }
 
-  function addSynchronizedVariableMethods(jsync, targetVariable) {
+  function addSynchronizedVariableMethods(jsync, targetVariable, reservedWords) {
     // targetVariable will be details.variable if it's synced. Otherwise it should be a stand-in variable
-    // This overwrites any previous methods
-    Object.defineProperty(targetVariable, '$on', { 
+    for (var key in clientReservedWords) {
+      if (typeof targetVariable[key] === 'function') {
+        delete targetVariable[key];
+      }
+    }
+    if (reservedWords === undefined) reservedWords = {}
+    for (var key in clientReservedWords) { 
+      if (!reservedWords[key]) {
+        reservedWords[key] = key;
+      }
+    }
+
+    Object.defineProperty(targetVariable, reservedWords['$on'], { 
       value: function $on(event, firstArg, secondArg, thirdArg) {
         var props;
         var options;
@@ -639,7 +656,7 @@ function jsynchronousSetup() {
       writable: true,
     });
 
-    Object.defineProperty(targetVariable, '$info', { 
+    Object.defineProperty(targetVariable, reservedWords['$info'], { 
       value: function $info() {
         if (jsync.standIn) {
           return {
@@ -650,6 +667,7 @@ function jsynchronousSetup() {
           return {
             name: jsync.name,
             counter: jsync.counter,
+            syncTime: jsync.syncTime.getTime(),
             rewind: jsync.rewind,
             rewound: jsync.rewound === true,
             one_way: jsync.one_way === true,
@@ -666,7 +684,7 @@ function jsynchronousSetup() {
     });
 
     if (jsync.rewind === true) {
-      Object.defineProperty(targetVariable, '$rewind', {
+      Object.defineProperty(targetVariable, reservedWords['$rewind'], {
         value: function $rewind(snapshot, counter) {
           return rewind(jsync, snapshot, counter);
         },
