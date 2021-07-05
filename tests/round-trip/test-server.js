@@ -147,6 +147,30 @@ async function startTest() {
   delete $erved.bball
   await test('Deletion of object');
 
+  $erved.external = [[], 0, 1, 2, 3];
+  const external = $erved.external;
+  await test('Creation of an array that will soon be deleted');
+
+  delete $erved.external;
+  await test('Deletion of an array that is still referenced');
+
+  external.push(4);
+  await test('Modification of a deleted property');
+
+  external[0] = {a: 'b'};
+  await test('Modification of a nested deleted property');
+
+  $erved.resurrected = external;
+  await test('Assignment of a previously deleted array');
+
+  external.push({b: 'c'});
+  await test('Assignment of a variable that should not be tracked');
+
+  $erved.resurrected.push({z: 'y'});
+  await test('Assignment of a variable that should be tracked');
+
+  delete $erved.resurrected;
+  await test('Deletion of a reassigned previously deleted array');
 
   $erved.arr = [];
   await test('Assignment of empty array');
@@ -350,13 +374,11 @@ async function startTest() {
     await test();
   }
 
-
-  console.log(`Test ${levelCounter} - Cleaning up`);
   delete $erved['random'];
+  await test(`Cleaning up`);
+
   $erved.test = 'passed';
-  await test();
-
-
+  await test('One last check');
 
   console.log('All tests passed!');
 }

@@ -46,10 +46,10 @@ class Change {
     this.hash = syncedObject.hash;
     this.operation = operation;  // set, delete, pop, shift, unshift, etc.
     this.prop = prop;
-    this.value = value;
-    this.oldValue = oldValue;
-    this.type = flat(type);
-    this.oldType = flat(oldType);
+    this.value = flat(value);
+    this.type = type;
+    this.oldValue = flat(oldValue);
+    this.oldType = oldType;
 
     if (Array.isArray(syncedObject.proxy) && !isNaN(prop) && Number.isInteger(Number(prop))) {
       this.prop = Number(prop);  // Coerce prop to a number if it belongs to an array
@@ -181,7 +181,7 @@ class SyncedObject {
   handler(syncedObject) {
     return {
       get(obj, prop) {
-        if (prop === jsynchronous.reserved_property) {
+        if (prop === jsynchronous.reserved_property && syncedObject.deleted !== true) {
           return syncedObject;
         }
 
@@ -203,13 +203,16 @@ class SyncedObject {
           return true  // Array lengths trigger every time the array is modified. We can ignore them
         }
 
+        if (syncedObject.deleted === true) {
+          obj[prop] = value;
+          return true;
+        }
+
         if (isRoot(syncedObject)) {
           if (syncedObject.jsync.reserved[prop]) {
             throw `Cannot reassign the jsynchronous reserved word ${prop}. If you need to use this property, you can reassign it by specifying {${prop}: 'reassigned-${prop}'} in the options when calling jsynchronous() on a newly synchronized variable.`;
           }
         }
-
-        let syncedValue;
 
         if (isPrimitive(type) || type === 'function') {
           obj[prop] = value;
@@ -217,8 +220,7 @@ class SyncedObject {
           if (referencesAnotherJsynchronousVariable(value, syncedObject.jsync)) {
             throw `Cannot reference a jsynchronous variable that's already being tracked by another synchronized variable.`;
           }
-
-          syncedValue = value[jsynchronous.reserved_property];
+          let syncedValue = value[jsynchronous.reserved_property];
           if (syncedValue === undefined) {
             syncedValue = new SyncedObject(syncedObject.jsync, value);
             obj[prop] = syncedValue.proxy;
@@ -295,6 +297,7 @@ class SyncedObject {
       if (Object.keys(this.parents).length === 0) {
         // Prep for garbage collection
         new Deletion(this.jsync, this);
+        this.deleted = true;
       }
     } else {
       throw `Unlinking a jsynchronous variable from its parent, this.parents is missing unlinked parent's properties.`;
@@ -730,8 +733,10 @@ function noCollisionHash(existingHashes) {
   return hash;
 }
 function randomHash() {
-  // Returns a 0-9a-f string between 9-12 characters in length
-  return Math.random().toString(36).substring(2, 10);
+  // Returns a 0-9a-f string exactly 8 characters in length
+  const hash = Math.random().toString(36).substring(2, 10);
+  if (hash.length !== 8) return randomHash();
+  return hash
 }
 function binarySearch(sortedArray, compareFunc){
   let start = 0;
