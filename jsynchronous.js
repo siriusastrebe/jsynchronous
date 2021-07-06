@@ -464,9 +464,11 @@ class JSynchronous {
     }
 
     // Now that it's sent, the rest is history
-    this.queuedCommunications.forEach((c) => {
-      this.history.push(c);
-    });
+    if (this.one_way !== true || this.rewind === true) {
+      this.queuedCommunications.forEach((c) => {
+        this.history.push(c);
+      });
+    }
 
     this.queuedCommunications.length = 0;
 
@@ -630,7 +632,7 @@ class JSynchronous {
       visited.set(target, mirrored);
 
       enumerate(target, (value, prop) => {
-        mirrored[prop] = this.copy(target[prop]);
+        mirrored[prop] = this.copy(value, visited);
       });
 
       return mirrored;
@@ -768,7 +770,7 @@ function randomHash() {
 
   if (hash.length !== 8) {
     // Happens about 5 times out of a million
-    return randomHash(); 
+    return (hash + randomHash()).substring(0, 8);
   }
 
   return hash

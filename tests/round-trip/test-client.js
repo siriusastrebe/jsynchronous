@@ -10,13 +10,19 @@ jsynchronous.send = (websocket, data) => {
 }
 
 const $erved = jsynclient('object');
-const $relay = jsynchronous({});
+const $relay = jsynchronous({}, '', {one_way: true});
 
 const $rewinder = jsynclient('object', 'rewinder');
 const $rewound = jsynchronous({}, 'rewound', {rewind: true});
 
 
-$erved.$on('changes', () => onChanges($erved, $relay));
+$erved.$on('changes', () => { 
+  onChanges($erved, $relay)
+  if ($erved.test === 'passed') {
+    const used = process.memoryUsage().heapUsed / 1024 / 1024;
+    console.log(`All tests passed! Memory used: ${Math.round(used * 100) / 100} MB`);
+  }
+});
 $rewinder.$on('changes', () => onChanges($rewinder, $rewound));
 $rewinder.$on('snapshot', (name) => onSnapshot(name, $rewound));
 

@@ -8,7 +8,7 @@ jsynchronous.send = (websocket, data) => {
   websocket.send(data);
 }
 
-const $erved = jsynchronous({});
+const $erved = jsynchronous({}, '', {one_way: true});
 const $relay = jsynclient('object');
 const $rewinder = jsynchronous({initial: 'data', eight: [8, 8, 8], '∞': {'∞': '∞'}}, 'rewinder', {rewind: true});
 
@@ -247,6 +247,7 @@ async function startTest() {
   await test('Editing newly created synchronized variable', $rewinder, $rewound);
   await test('Testing previous snapshot with locally saved value', $rewound.$rewind(0), snapshot0);
 
+
   levelCounter++;
   console.log(`Test ${levelCounter} - Creating hundreds of snapshots with known values`);
   const snapshots = [snapshot0];
@@ -259,23 +260,28 @@ async function startTest() {
     await test(null, $rewound.$rewind(i), snapshots[i]);
   }
 
+  for (let i=0; i<snapshots.length; i++) {
+    await test(null, $rewound.$rewind(i), snapshots[i]);
+  }
+
+  levelCounter++;
+  console.log(`Test ${levelCounter} - Creating hundreds of snapshots with randomized values`);
   for (let i=0; i<100; i++) {
+    $rewinder.$napshot(i+100);
+    snapshots.push($rewinder.$copy());
+
+    $rewinder[i+100] = randomDataStructure(i+1);
+    await test(null, $rewinder, $rewound);
+    await test(null, $rewound.$rewind(i+100), snapshots[i+100]);
+  }
+
+  for (let i=0; i<snapshots.length; i++) {
     await test(null, $rewound.$rewind(i), snapshots[i]);
   }
 
 
 
 
-
-
-
-
-
-  
-
-
-
-  /*
   levelCounter++;
   console.log(`Test ${levelCounter} - Randomly generated data structures size 1`);
   for (let i=0; i<20; i++) {
@@ -407,12 +413,14 @@ async function startTest() {
 
   delete $erved['random'];
   await test(`Cleaning up`);
-  */
 
+  levelCounter++;
   $erved.test = 'passed';
-  await test('One last check');
+  console.log(`Test ${levelCounter} - One last check`);
+  await test();
 
-  console.log('All tests passed!');
+  const used = process.memoryUsage().heapUsed / 1024 / 1024;
+  console.log(`All tests passed! Memory used: ${Math.round(used * 100) / 100} MB`);
 }
 
 
@@ -555,11 +563,11 @@ function randomDataStructure(size, existing, currentSize) {
     currentSize = 0;
   }
 
-  if (currentSize < size) {
-    if (existing === undefined) {
-      existing = [randomEnumerable()];
-    }
+  if (existing === undefined) {
+    existing = [randomEnumerable()];
+  }
 
+  if (currentSize < size) {
     const random = existing[Math.floor(Math.random() * existing.length)];
     const dice = Math.random();
     if (Array.isArray(random)) {
