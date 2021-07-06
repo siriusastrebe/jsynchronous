@@ -46,7 +46,8 @@ function jsynchronousSetup() {
       var settings = json[3]
       var variableData = json[4];
 
-      newJsynchronous(name, counter, settings, variableData);
+      var jsync = newJsynchronous(name, counter, settings, variableData);
+      triggerChanges(jsync);
     } else if (op === 'changes') {
       var minCounter = json[2];
       var maxCounter = json[3];
@@ -109,7 +110,6 @@ function jsynchronousSetup() {
         references: []
       },
       storedChanges: [],
-      syncTime: new Date().getTime(),
       resyncing: false,
       resyncs: [],
       backoff: 0,
@@ -174,7 +174,7 @@ function jsynchronousSetup() {
     if (standIns[name]) {
       return standIns[name].variable;
     } else {
-      standIns[name] = jsyncObject(undefined, -1, {}, true);
+      standIns[name] = jsyncObject(name, -1, {}, true);
 
       if (detailedType(type) === 'array') {
         type = 'array';
@@ -356,10 +356,7 @@ function jsynchronousSetup() {
     }
 
     if (triggerEvents) {
-      for (let j=0; j<jsync.changesEvents.length; j++) {
-        var e = jsync.changesEvents[j];
-        triggerChanges(jsync, e.callback);
-      }
+      triggerChanges(jsync);
     }
   }
   function set(details, prop, newDetails, oldDetails, jsync) {
@@ -667,7 +664,6 @@ function jsynchronousSetup() {
           return {
             name: jsync.name,
             counter: jsync.counter,
-            syncTime: jsync.syncTime.getTime(),
             rewind: jsync.rewind,
             rewound: jsync.rewound === true,
             one_way: jsync.one_way === true,
@@ -694,16 +690,11 @@ function jsynchronousSetup() {
   }
 
   function triggerChanges(jsync, callback) {
-    var variable = jsync.root.variable;
-    callback(variable);
-
-//    // Provide the callback with variable relative to the properties they listed
-//    if (props) {
-//      
-//      for (let j=0; j<props.length; j++) {
-//        variable = variable[props[j]];
-//      }
-//    }
+    for (let j=0; j<jsync.changesEvents.length; j++) {
+      var e = jsync.changesEvents[j];
+      var variable = jsync.root.variable;
+      e.callback(variable);
+    }
   }
 
   // ----------------------------------------------------------------
@@ -734,8 +725,8 @@ function jsynchronousSetup() {
         if (jsync.secret === undefined) {
           handshake(jsync, rootHash, timeout * 3);  // Keep trying to handshake, but really backoff
 
-          if (timeout >= defaultTimeout * 50 && timeout < defaultTimeout * 500) {
-            console.warn("Jsynchronous client->server handshake left hanging for over " + Math.round(timeout / 1000) + " seconds. This usually means haven't set up the server to call jsynchronous.onmessage(websocket, data). Resynchronization is impossible without a successful handshake. Use the option {one_way: true} on the server side call to jsynchronous() to disable this warning.");
+          if (timeout >= 30000 && timeout < 30000 * 3) {
+            console.warn("Jsynchronous client->server handshake left hanging for over a minute. This usually means haven't set up the server to call jsynchronous.onmessage(websocket, data). Resynchronization is impossible without a successful handshake. Use the option {one_way: true} on the server side call to jsynchronous() to disable this warning.");
           }
         }
       }, timeout);

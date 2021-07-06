@@ -10,6 +10,8 @@ jsynchronous.send = (websocket, data) => {
 
 const $erved = jsynchronous({});
 const $relay = jsynclient('object');
+const $rewinder = jsynchronous({initial: 'data', eight: [8, 8, 8], '∞': {'∞': '∞'}}, 'rewinder');
+
 
 // Jsync server setup
 const wss = new WebSocket.Server({ port: 8080 });
@@ -19,6 +21,7 @@ let communication = 0;
 wss.on('connection', function connection(ws) {
   ws.on('message', function incoming(message) {});
   $erved.$ync(ws);
+  $rewinder.$ync(ws);
 
   console.log('Server->relay communcation established');
   communication += 1;
@@ -50,16 +53,25 @@ async function connectRelay(backoff) {
 }
 connectRelay();
 
-$relay.$on('changes', () => {
-  
-});
-
 // ----------------------------------------------------------------
 // Start the test
 // ----------------------------------------------------------------
 async function startTest() {
   await wait(1000);
   await test0();
+
+
+
+
+
+  const $rewound = jsynclient('object', 'rewound');
+  await test('Creating a named jsynchronous variable with rewind enabled', $rewinder, $rewound);
+
+
+
+
+
+
   
 
   await test('Assignment of property on root');
@@ -237,7 +249,6 @@ async function startTest() {
   $erved.arr.length = 0;
   await test('Setting array length to a value smaller than the current length');
 
-
   $erved.arr[10] = 10;
   await test('Assigning an array property greater than the length of the array');
 
@@ -245,6 +256,7 @@ async function startTest() {
   await wait(200);
 
 
+  /*
   levelCounter++;
   console.log(`Test ${levelCounter} - Randomly generated data structures size 1`);
   for (let i=0; i<20; i++) {
@@ -376,6 +388,7 @@ async function startTest() {
 
   delete $erved['random'];
   await test(`Cleaning up`);
+  */
 
   $erved.test = 'passed';
   await test('One last check');
@@ -594,7 +607,7 @@ function wait(t) {
 }
 
 async function matchOrThrow(left, right, testNumber) {
-  let results =  await match($erved, $relay);
+  let results =  await match(left, right);
   if (results === false) {
     console.log(util.inspect(left, {depth: 1, colors: true}));
     console.log('----------------------------------------------------------------');

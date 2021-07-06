@@ -12,6 +12,14 @@ jsynchronous.send = (websocket, data) => {
 const $erved = jsynclient('object');
 const $relay = jsynchronous({});
 
+const $rewinder = jsynclient('object', 'rewinder');
+const $rewound = jsynchronous({}, 'rewound');
+
+
+$erved.$on('changes', () => onChanges($erved, $relay));
+$rewinder.$on('changes', () => {
+  onChanges($rewinder, $rewound);
+});
 
 // Jsync client setup
 async function connectClient(backoff) {
@@ -40,22 +48,22 @@ wss.on('connection', function connection(ws) {
   console.log('Relay->server communication established');
   ws.on('message', function incoming(message) {});
   $relay.$ync(ws);
+  $rewound.$ync(ws);
 });
 
 
-// Relay the data
-$erved.$on('changes', () => {
+function onChanges($left, $right) {
 //  console.log(util.inspect($erved, {depth: null, colors: true}));
 //  console.log('');
-  for (let prop in $erved) {
-    $relay[prop] = $erved[prop];
+  for (let prop in $left) {
+    $right[prop] = $left[prop];
   }
-  for (let prop in $relay) {
-    if ($erved.hasOwnProperty(prop) === false) {
-      delete $relay[prop]
+  for (let prop in $right) {
+    if ($left.hasOwnProperty(prop) === false) {
+      delete $right[prop];
     }
   }
-});
+}
 
 // ----------------------------------------------------------------
 // Helper functions
