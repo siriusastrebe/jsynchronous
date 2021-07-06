@@ -13,13 +13,12 @@ const $erved = jsynclient('object');
 const $relay = jsynchronous({});
 
 const $rewinder = jsynclient('object', 'rewinder');
-const $rewound = jsynchronous({}, 'rewound');
+const $rewound = jsynchronous({}, 'rewound', {rewind: true});
 
 
 $erved.$on('changes', () => onChanges($erved, $relay));
-$rewinder.$on('changes', () => {
-  onChanges($rewinder, $rewound);
-});
+$rewinder.$on('changes', () => onChanges($rewinder, $rewound));
+$rewinder.$on('snapshot', (name) => onSnapshot(name, $rewound));
 
 // Jsync client setup
 async function connectClient(backoff) {
@@ -63,6 +62,10 @@ function onChanges($left, $right) {
       delete $right[prop];
     }
   }
+}
+
+function onSnapshot(name, target) {
+  $rewound.$napshot(name);
 }
 
 // ----------------------------------------------------------------

@@ -10,8 +10,7 @@ jsynchronous.send = (websocket, data) => {
 
 const $erved = jsynchronous({});
 const $relay = jsynclient('object');
-const $rewinder = jsynchronous({initial: 'data', eight: [8, 8, 8], '∞': {'∞': '∞'}}, 'rewinder');
-
+const $rewinder = jsynchronous({initial: 'data', eight: [8, 8, 8], '∞': {'∞': '∞'}}, 'rewinder', {rewind: true});
 
 // Jsync server setup
 const wss = new WebSocket.Server({ port: 8080 });
@@ -41,7 +40,7 @@ async function connectRelay(backoff) {
       startTest();
     }
   });
-  
+
   ws.on('message', function incoming(data) {
     jsynclient.onmessage(data);
   });
@@ -59,20 +58,6 @@ connectRelay();
 async function startTest() {
   await wait(1000);
   await test0();
-
-
-
-
-
-  const $rewound = jsynclient('object', 'rewound');
-  await test('Creating a named jsynchronous variable with rewind enabled', $rewinder, $rewound);
-
-
-
-
-
-
-  
 
   await test('Assignment of property on root');
 
@@ -253,7 +238,37 @@ async function startTest() {
   await test('Assigning an array property greater than the length of the array');
 
 
-  await wait(200);
+  const $rewound = jsynclient('object', 'rewound');
+  await test('Creating a named jsynchronous variable with rewind enabled', $rewinder, $rewound);
+
+  $rewinder.$napshot(0);
+  const snapshot0 = $rewinder.$copy();
+  $rewinder['¡'] = '!';
+  await test('Editing newly created synchronized variable', $rewinder, $rewound);
+  await test('Testing previous snapshot with locally saved value', $rewound.$rewind(0), snapshot0);
+
+  levelCounter++;
+  console.log(`Test ${levelCounter} - Creating hundreds of snapshots with known values`);
+  const snapshots = [];
+  for (let i=1; i<100; i++) {
+    $rewinder.$napshot(i);
+    snapshots.push($rewinder.$copy());
+
+    $rewinder[i] = i * i;
+    await test(null, $rewinder, $rewound);
+    await test(null, $rewound.$rewind(i), snapshots[i-1]);
+  }
+
+
+
+
+
+
+
+
+
+  
+
 
 
   /*

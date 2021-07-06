@@ -98,6 +98,7 @@ function jsynchronousSetup() {
       objects: {},  // key-> value corresponds to details.hash->details
       root: undefined,
       changesEvents: [],
+      snapshotEvents: [],
       standIn: standIn || false,
       rewind: settings.rewind || false,
       one_way: settings.one_way || false,
@@ -204,15 +205,22 @@ function jsynchronousSetup() {
 
     if (standIn) {
       // Copy events assigned to standIn while waiting on the synchronized variable
-      for (var i=0; i<standIn.changesEvents.length; i++) {
-        var e = standIn.changesEvents[i];
-        if (jsync.changesEvents.indexOf(e) === -1) {
-          jsync.changesEvents.push(e);
-        }
-      }
+      copyEvents(standIn, jsync);
     }
 
     return standIn;
+  }
+  function copyEvents(source, target) {
+    var eventTypes = {'changes': 'changesEvents', 'snapshot': 'snapshotEvents'};
+
+    for (var eventName in eventTypes) {
+      for (var i=0; i<source[eventTypes[eventName]].length; i++) {
+        var ev = source[eventTypes[eventName]][i];
+        if (target[eventTypes[eventName]].indexOf(ev) === -1) {
+          target[eventTypes[eventName]].push(ev);
+        }
+      }
+    }
   }
 
   function createSyncedVariable(hash, type, each, jsync, isRoot) {
@@ -447,6 +455,11 @@ function jsynchronousSetup() {
 
   function createSnapshot(counter, name, jsync) {
     jsync.snapshots[name] = {counter: counter, name: name};
+
+    for (var i=0; i<jsync.snapshotEvents.length; i++) {
+      const ev = jsync.snapshotEvents[i];
+      ev.callback(name);
+    }
   }
 
   function sortedSnapshots(jsync) {
@@ -457,6 +470,7 @@ function jsynchronousSetup() {
     snapshots.sort(function (a, b) {
       return a.counter - b.counter;
     });
+
     return snapshots;
   }
 
@@ -492,7 +506,7 @@ function jsynchronousSetup() {
     });
   }
   function cleanStorage(jsync) {
-    let splices = 0;
+    var splices = 0;
     for (var i=0; i<jsync.storedChanges.length; i++) {
       var change = jsync.storedChanges[i];
 
@@ -627,7 +641,7 @@ function jsynchronousSetup() {
         var options;
         var callback;
 
-        for (let i=0; i<3; i++) {
+        for (var i=0; i<3; i++) {
           var arg = [firstArg, secondArg, thirdArg][i];
           var argType = detailedType(arg);
           if (argType === 'array') {
@@ -646,6 +660,8 @@ function jsynchronousSetup() {
         var e = {event: event, props: props, options: options, callback: callback};
         if (e.event === 'changes') {
           jsync.changesEvents.push(e);
+        } else if (e.event === 'snapshot') {
+          jsync.snapshotEvents.push(e);
         } else {
           throw "Jsynchronous doesn't have an event trigger for event type '" + e.event + "'";
         }
@@ -690,7 +706,7 @@ function jsynchronousSetup() {
   }
 
   function triggerChanges(jsync, callback) {
-    for (let j=0; j<jsync.changesEvents.length; j++) {
+    for (var j=0; j<jsync.changesEvents.length; j++) {
       var e = jsync.changesEvents[j];
       var variable = jsync.root.variable;
       e.callback(variable);

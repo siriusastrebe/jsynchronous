@@ -37,7 +37,7 @@ const syncedNames = {};
 
 class Change {
   constructor(syncedObject, operation, prop, value, type, oldValue, oldType) {
-    // A change exists in the space of two snapshots in time for objects that may not exist earlier or presently.
+    // A change exists in the space of two moments in time for objects that may not exist earlier or presently.
     // It's important for garbage collection that a change does not directly reference any synced variables, only hashes.
     const jsync = syncedObject.jsync
 
@@ -117,6 +117,9 @@ class Snapshot {
     this.operation = 'snapshot';
     this.name = name;
 
+    if (jsync.rewind !== true) {
+      throw `Jsynchronous snapshot can only be created on rewind variables.`;
+    }
     if (jsync.snapshots[name]) {
       throw `Jsynchronous snapshot by the name ${name} already exists!`;
     }
@@ -356,7 +359,8 @@ class JSynchronous {
       $listeners: options.$listeners || '$listeners',
       $info:      options.$info      || '$info',
       $napshot:   options.$napshot   || '$napshot',
-      $rewind:    options.$rewind    || '$rewind'
+      $rewind:    options.$rewind    || '$rewind',
+      $copy:      options.$copy      || '$copy'
     }
 
     // Coerce this to refer to this jsynchronous instance
@@ -368,7 +372,8 @@ class JSynchronous {
     this.reserved[this.defaults['$listeners']] = (() => [ ...this.listeners.keys() ]);
     this.reserved[this.defaults['$info']]      = (() => this.info());
     this.reserved[this.defaults['$napshot']]   = ((a) => this.snapshot(a));
-    this.reserved[this.defaults['$rewind']]    = ((a) => this.snapshot(a));
+    this.reserved[this.defaults['$rewind']]    = ((a) => this.rewind(a));
+    this.reserved[this.defaults['$copy']]      = (() => this.copy());
 
     this.bufferTimeout = undefined;
     this.queuedCommunications = [];
@@ -551,6 +556,7 @@ class JSynchronous {
   }
   snapshot(name) {
     new Snapshot(this, name);
+    return name;
   }
   on() {
     // TODO: Implement sever side events
@@ -604,6 +610,30 @@ class JSynchronous {
       // TODO: Tear this out, we don't need to be polite to clients that fail the secret check
       let payload = [OP_ENCODINGS['error'], 'Secret check failed'];
       jsynchronous.send(websocket, JSON.stringify(payload));
+    }
+  }
+  copy(target, visited) {
+    if (visited === undefined) visited = new Map();
+    if (target === undefined) target = this.root.proxy;
+
+    if (visited.has(target)) {
+      return visited.get(target);
+    }
+
+    const type = detailedType(target);
+
+    if (isPrimitive(type)) {
+      return target;
+    } else {
+      const mirrored = newCollection(type, target);
+
+      visited.set(target, mirrored);
+
+      enumerate(target, (value, prop) => {
+        mirrored[prop] = this.copy(target[prop]);
+      });
+
+      return mirrored;
     }
   }
   describe() {
@@ -735,7 +765,12 @@ function noCollisionHash(existingHashes) {
 function randomHash() {
   // Returns a 0-9a-f string exactly 8 characters in length
   const hash = Math.random().toString(36).substring(2, 10);
-  if (hash.length !== 8) return randomHash();
+
+  if (hash.length !== 8) {
+    // Happens about 5 times out of a million
+    return randomHash(); 
+  }
+
   return hash
 }
 function binarySearch(sortedArray, compareFunc){
