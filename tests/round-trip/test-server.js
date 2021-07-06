@@ -249,14 +249,18 @@ async function startTest() {
 
   levelCounter++;
   console.log(`Test ${levelCounter} - Creating hundreds of snapshots with known values`);
-  const snapshots = [];
+  const snapshots = [snapshot0];
   for (let i=1; i<100; i++) {
     $rewinder.$napshot(i);
     snapshots.push($rewinder.$copy());
 
     $rewinder[i] = i * i;
     await test(null, $rewinder, $rewound);
-    await test(null, $rewound.$rewind(i), snapshots[i-1]);
+    await test(null, $rewound.$rewind(i), snapshots[i]);
+  }
+
+  for (let i=0; i<100; i++) {
+    await test(null, $rewound.$rewind(i), snapshots[i]);
   }
 
 
