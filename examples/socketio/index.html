@@ -6,12 +6,13 @@
 
   const $ynced = jsynchronous('object');
 
-  socket.on('msg', function (data) {
-
+  jsynchronous.send = (data) => socket.emit('msg', data);
+  socket.on('msg', (data) => {
     jsynchronous.onmessage(data);
     console.log($ynced);
     document.body.innerHTML = JSON.stringify($ynced);
   });
+
 </script>
 <body>
 </body>

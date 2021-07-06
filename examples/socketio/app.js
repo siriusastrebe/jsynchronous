@@ -31,10 +31,10 @@ const io = new Server(server);
 
 io.on('connection', (socket) => {
   $ynchronized.$ync(socket);  
-
-  socket.on('disconnect', function() {
-    $ynchronized.$unsync(socket);
+  socket.on('msg', (data) => {
+    jsynchronous.onmessage(socket, data);
   });
+  socket.on('disconnect', () => $ynchronized.$unsync(socket));
 });
 
 // Routes
