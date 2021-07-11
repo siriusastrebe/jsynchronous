@@ -248,8 +248,8 @@ async function startTest() {
   await test('Testing previous snapshot with locally saved value', $rewound.$rewind(0), snapshot0);
 
 
-  levelCounter++;
-  console.log(`Test ${levelCounter} - Creating hundreds of snapshots with known values`);
+  level++;
+  console.log(`Test ${level} - Creating hundreds of snapshots with known values`);
   const snapshots = [snapshot0];
   for (let i=1; i<100; i++) {
     $rewinder.$napshot(i);
@@ -264,8 +264,8 @@ async function startTest() {
     await test(null, $rewound.$rewind(i), snapshots[i]);
   }
 
-  levelCounter++;
-  console.log(`Test ${levelCounter} - Creating hundreds of snapshots with randomized values`);
+  level++;
+  console.log(`Test ${level} - Creating hundreds of snapshots with randomized values`);
   for (let i=0; i<100; i++) {
     $rewinder.$napshot(i+100);
     snapshots.push($rewinder.$copy());
@@ -282,94 +282,94 @@ async function startTest() {
 
 
 
-  levelCounter++;
-  console.log(`Test ${levelCounter} - Randomly generated data structures size 1`);
+  level++;
+  console.log(`Test ${level} - Randomly generated data structures size 1`);
   for (let i=0; i<20; i++) {
     $erved.random = randomDataStructure(1);
     await test();
   }
 
 
-  levelCounter++;
+  level++;
   let all = getAllObjects($erved.random);
-  console.log(`Test ${levelCounter} - Altering the generated data structure randomly`);
+  console.log(`Test ${level} - Altering the generated data structure randomly`);
   for (let i=0; i<100; i++) {
     randomDataStructure(1, all);
     await test();
   }
 
 
-  levelCounter++;
+  level++;
   all = getAllObjects($erved.random);
-  console.log(`Test ${levelCounter} - Altering the generated data structure randomly with multiple edits`);
+  console.log(`Test ${level} - Altering the generated data structure randomly with multiple edits`);
   for (let i=0; i<100; i++) {
     randomDataStructure(10, all);
     await test();
   }
 
 
-  levelCounter++;
-  console.log(`Test ${levelCounter} - Randomly generated data structures size 2`);
+  level++;
+  console.log(`Test ${level} - Randomly generated data structures size 2`);
   for (let i=0; i<20; i++) {
     $erved.random = randomDataStructure(2);
     await test();
   }
 
 
-  levelCounter++;
+  level++;
   all = getAllObjects($erved.random);
-  console.log(`Test ${levelCounter} - Altering the generated data structure randomly with multiple edits`);
+  console.log(`Test ${level} - Altering the generated data structure randomly with multiple edits`);
   for (let i=0; i<100; i++) {
     randomDataStructure(10, all);
     await test();
   }
 
 
-  levelCounter++;
-  console.log(`Test ${levelCounter} - Randomly generated data structures size 3`);
+  level++;
+  console.log(`Test ${level} - Randomly generated data structures size 3`);
   for (let i=0; i<20; i++) {
     $erved.random = randomDataStructure(3);
     await test();
   }
 
 
-  levelCounter++;
+  level++;
   all = getAllObjects($erved.random);
-  console.log(`Test ${levelCounter} - Altering the generated data structure randomly with multiple edits`);
+  console.log(`Test ${level} - Altering the generated data structure randomly with multiple edits`);
   for (let i=0; i<100; i++) {
     randomDataStructure(10, all);
     await test();
   }
 
 
-  levelCounter++;
-  console.log(`Test ${levelCounter} - Randomly generated data structures size 5`);
+  level++;
+  console.log(`Test ${level} - Randomly generated data structures size 5`);
   for (let i=0; i<20; i++) {
     $erved.random = randomDataStructure(5);
     await test();
   }
 
 
-  levelCounter++;
+  level++;
   all = getAllObjects($erved.random);
-  console.log(`Test ${levelCounter} - Altering the generated data structure randomly`);
+  console.log(`Test ${level} - Altering the generated data structure randomly`);
   for (let i=0; i<100; i++) {
     randomDataStructure(1, all);
     await test();
   }
 
 
-  levelCounter++;
-  console.log(`Test ${levelCounter} - Randomly generated data structures size 10`);
+  level++;
+  console.log(`Test ${level} - Randomly generated data structures size 10`);
   for (let i=0; i<20; i++) {
     $erved.random = randomDataStructure(10);
     await test();
   }
 
 
-  levelCounter++;
+  level++;
   all = getAllObjects($erved.random);
-  console.log(`Test ${levelCounter} - Altering the generated data structure randomly with multiple edits`);
+  console.log(`Test ${level} - Altering the generated data structure randomly with multiple edits`);
   for (let i=0; i<100; i++) {
     randomDataStructure(10, all);
     await test();
@@ -377,17 +377,17 @@ async function startTest() {
 
 
 
-  levelCounter++;
-  console.log(`Test ${levelCounter} - Randomly generated data structures size 100`);
+  level++;
+  console.log(`Test ${level} - Randomly generated data structures size 100`);
   for (let i=0; i<20; i++) {
     $erved.random = randomDataStructure(100);
     await test();
   }
 
 
-  levelCounter++;
+  level++;
   all = getAllObjects($erved.random);
-  console.log(`Test ${levelCounter} - Altering the generated data structure randomly with hundreds of edits`);
+  console.log(`Test ${level} - Altering the generated data structure randomly with hundreds of edits`);
   for (let i=0; i<100; i++) {
     randomDataStructure(100, all);
     await test();
@@ -395,17 +395,17 @@ async function startTest() {
 
 
 
-  levelCounter++;
-  console.log(`Test ${levelCounter} - Randomly generated data structures size 1000`);
+  level++;
+  console.log(`Test ${level} - Randomly generated data structures size 1000`);
   for (let i=0; i<20; i++) {
     $erved.random = randomDataStructure(1000);
     await test();
   }
 
 
-  levelCounter++;
+  level++;
   all = getAllObjects($erved.random);
-  console.log(`Test ${levelCounter} - Altering the generated data structure randomly with thousands of edits`);
+  console.log(`Test ${level} - Altering the generated data structure randomly with thousands of edits`);
   for (let i=0; i<10; i++) {
     randomDataStructure(1000, all);
     await test();
@@ -414,9 +414,9 @@ async function startTest() {
   delete $erved['random'];
   await test(`Cleaning up`);
 
-  levelCounter++;
+  level++;
   $erved.test = 'passed';
-  console.log(`Test ${levelCounter} - One last check`);
+  console.log(`Test ${level} - One last check`);
   await test();
 
   const used = process.memoryUsage().heapUsed / 1024 / 1024;
@@ -427,12 +427,12 @@ async function startTest() {
 // ----------------------------------------------------------------
 // Test Helper functions
 // ----------------------------------------------------------------
-let levelCounter = 0;
+let level = 0;
 async function test(text, left, right) {
   if (text) {
-    levelCounter++;
-    $erved.test = levelCounter;
-    console.log(`Test ${levelCounter} - ${text}`);
+    level++;
+    $erved.test = level;
+    console.log(`Test ${level} - ${text}`);
   }
 
   if (left === undefined) {

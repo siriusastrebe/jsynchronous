@@ -1,3 +1,7 @@
+# Usage
+
+```node test.js```
+
 # Setup
 
 ```npm install selenium-webdriver```
