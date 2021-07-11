@@ -42,40 +42,47 @@ app.get('/jsynchronous-client.js', (req, res) => {
 });
 
 // Selenium
+const browsers = ['firefox', 'chrome'];
+let drivers = [];
 (async () => {
-  let driver = await new Builder().forBrowser('firefox').build();
+  drivers = await Promise.all(browsers.map((browser) => new Builder().forBrowser(browser).build()));
   try {
-    await driver.get('http://localhost:3000');
-    await test(driver, 'Creation of a standard jsynchronous object', $test);
+    await all((driver) => driver.get('http://localhost:3000'));
+
+    await test('Creation of a standard jsynchronous object', $test);
     console.log(`All tests passed!`);
   } catch (e) {
     console.error(e);
   } finally {
-    await driver.quit();
+    await all((driver) => driver.quit());
   }
 })();
 
-async function test(driver, text, $ynced) {
+async function test(text, $ynced) {
+  await all((driver) => driver.wait(() => waitUntilLevel(driver, level), 8000));
+
   if (text) {
     level++;
+    $test.level = level;
     console.log(`Level ${level} - ${text}`);
   }
-  await driver.wait(waitUntilLevel(driver, level), 8000);
 
-  /*
-  await driver.wait(() => {
-    await driver.executeScript('return jsynchronous()')
-    $ynced.
-  }), 8000);
-  */
+  await all((driver) => driver.wait(() => waitUntilLevel(driver, level), 8000));
+
+  //driver.wait(() => );
+}
+
+async function all(fn) {
+  return await Promise.all(drivers.map((driver) => fn(driver)));
 }
 
 async function waitUntilLevel(driver, level) {
   const $levels = await driver.executeScript("return jsynchronous('object')");
+console.log('lvl', $levels, level);
   if ($levels && $levels.level === level) {
     return true;
   } else {
-    return false;
+    return null;
   }
 }
 
