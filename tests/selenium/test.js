@@ -46,7 +46,7 @@ app.get('/jsynchronous-client.js', (req, res) => {
 // ----------------------------------------------------------------
 const browsers = ['firefox', 'chrome'];
 let drivers = [];
-(async () => {
+const runTests = (async () => {
   drivers = await Promise.all(browsers.map((browser) => new Builder().forBrowser(browser).build()));
   try {
     await all((driver) => driver.get('http://localhost:3000'));
@@ -57,6 +57,9 @@ let drivers = [];
 
     await test('Editing property of object', $test);
 
+    const $array1 = jsynchronous([], 'array1');
+    await test('Creating an empty array', $array1);
+
     const used = process.memoryUsage().heapUsed / 1024 / 1024;
     console.log(`All tests passed! Node memory footprint: ${Math.round(used * 100) / 100} MB`);
   } catch (e) {
@@ -64,13 +67,17 @@ let drivers = [];
   } finally {
     await all((driver) => driver.quit());
   }
-})();
+
+  return true;
+});
 
 async function test(text, $ynced) {
   try {
     await all((driver) => driver.wait(() => waitUntilLevel(driver, level), 8000));
   } catch (e) {
-    console.error(e); console.trace();
+    console.log('Test error flag gorilla');
+    //console.error(e); console.trace(); return;
+    throw e;
   }
 
   if (text) {
@@ -82,20 +89,39 @@ async function test(text, $ynced) {
   try {
     await all((driver) => driver.wait(() => waitUntilLevel(driver, level), 8000));
   } catch (e) {
-    console.error(e); console.trace();
+    console.log('Test error flag dolphin');
+    // console.error(e); console.trace(); return;
+    throw e;
   }
 
   try {
-    await all((driver) => driver.wait(() => {
-      return true;
-    }, 8000));
+    const name = $ynced.$info().name;
+    const type = getType($ynced);
+
+    const comparisons = await all(async (driver) => {
+      await driver.wait(async () => {
+        $data = await driver.executeScript(`return jsynchronous('${type}', '${name}')`);
+        const equality = deepComparison($data, $ynced);
+        if (equality) {
+          return true;
+        } else {
+          return null;
+        }
+      }, 8000);
+    });
   } catch (e) {
-    console.error(e); console.trace();
+    console.log('Test error - No match found');
+    throw e;
+    //console.error(e); console.trace(); return;
   }
 }
 
 async function all(fn) {
-  return await Promise.all(drivers.map((driver) => fn(driver)));
+  if (fn.then) {
+    return await Promise.all(drivers.map(async (driver) => await fn(driver)));
+  } else {
+    return await Promise.all(drivers.map((driver) => fn(driver)));
+  }
 }
 
 async function waitUntilLevel(driver, level) {
@@ -113,6 +139,10 @@ async function waitUntilLevel(driver, level) {
 function randomHash() {
   // A random hash with random length
   return Math.random().toString(36).substring(2);
+}
+
+function getType(enumerable) {
+  return (Array.isArray(enumerable) ? 'array' : 'object');
 }
 
 async function test0() {
@@ -203,3 +233,10 @@ function deepComparison(left, right, visited) {
 
   return true;
 }
+
+// ----------------------------------------------------------------
+// Start test
+// ----------------------------------------------------------------
+runTests().then(() => {}).catch((e) => { 
+  console.error(e); console.trace();
+});
