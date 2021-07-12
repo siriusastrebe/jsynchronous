@@ -1,4 +1,5 @@
 const express = require('express');
+const util = require('util');
 const jsynchronous = require('../../jsynchronous.js');
 const { Server } = require("socket.io");
 
@@ -94,11 +95,12 @@ async function test(text, $ynced) {
     throw e;
   }
 
-  try {
-    const name = $ynced.$info().name;
-    const type = getType($ynced);
-
-    const comparisons = await all(async (driver) => {
+  let comparisons;
+  let $data;
+  const name = $ynced.$info().name;
+  const type = getType($ynced);
+  for (let driver of drivers) {
+    try {
       await driver.wait(async () => {
         $data = await driver.executeScript(`return jsynchronous('${type}', '${name}')`);
         const equality = deepComparison($data, $ynced);
@@ -108,11 +110,14 @@ async function test(text, $ynced) {
           return null;
         }
       }, 8000);
-    });
-  } catch (e) {
-    console.log('Test error - No match found');
-    throw e;
-    //console.error(e); console.trace(); return;
+    } catch (e) {
+      console.error(e);
+      console.log(util.inspect($data, {depth: 1, colors: true}));
+      console.log('----------------------------------------------------------------');
+      console.log(util.inspect($ynced, {depth: 1, colors: true}));
+      console.log();
+      //console.error(e); console.trace(); return;
+    }
   }
 }
 
