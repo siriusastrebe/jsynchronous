@@ -26,11 +26,18 @@ const server = app.listen(port, () => {
 
 // Socket.io
 const io = new Server(server);
+const connections = [];
 
 io.on('connection', (socket) => {
   $test.$ync(socket);  
   socket.on('msg', (data) => jsynchronous.onmessage(socket, data));
-  socket.on('disconnect', () => $test.$unsync(socket));
+  connections.push(socket);
+
+  socket.on('disconnect', () => {
+    $test.$unsync(socket);
+    const index = connections.indexOf(socket);
+    if (index !== -1) connections.splice(index, 1);
+  });
 });
 
 // Routes
@@ -52,14 +59,30 @@ const runTests = (async () => {
   try {
     await all((driver) => driver.get('http://localhost:3000'));
 
-    await test0();
+    await test('Starting test', $test);
 
-    await test('Creation of a standard jsynchronous object', $test);
-
-    await test('Editing property of object', $test);
+    await test(`Editing property of primary jsynchronous object`, $test);
 
     const $array1 = jsynchronous([], 'array1');
-    await test('Creating an empty array', $array1);
+    connections.map((c) => $array1.$ync(c));
+    await test('Creating a new synchronized empty array', $array1);
+
+    const data = [[16], null];
+    data[1] = data[0];
+    const $array2 = jsynchronous(data, 'array2');
+    connections.map((c) => $array2.$ync(c));
+    await test('Creating synchronized basic directed acyclic graph using an array', $array2);
+
+    const array2 = $array2.$copy();
+    await test('Created a copy of the DAG, testing equality of copy', array2, 'array2');
+    
+    array2[0][0] = 17;
+    await testFailure('Modified the copy, testing for failure', array2, 'array2');
+
+    $array2[0][0] = 17;
+    await test('Modified the original in the same way, testing equality with the copy', array2, 'array2');
+
+
 
     const used = process.memoryUsage().heapUsed / 1024 / 1024;
     console.log(`All tests passed! Node memory footprint: ${Math.round(used * 100) / 100} MB`);
@@ -72,12 +95,35 @@ const runTests = (async () => {
   return true;
 });
 
-async function test(text, $ynced) {
+async function test(text, $erver, name) {
+  if (name === undefined) {
+    name = $erver.$info().name;
+  }
+
+  await incrementLevel(text);
+
+  for (let driver of drivers) {
+    // TODO: Replace with cyclic check for data
+    if (true) {
+      let $data;
+      try {
+        await driver.wait(() => nonCyclicEquality(driver, name, $erver, $data), 8000);
+        await driver.wait(() => fullEquality(driver, name, $erver), 8000);
+      } catch (e) {
+        console.log(util.inspect($erver, {depth: 1, colors: true}));
+        console.log('----------------------------------------------------------------');
+        console.log(util.inspect($data, {depth: 1, colors: true}));
+        throw e;
+      }
+    }
+  }
+}
+
+async function incrementLevel(text) {
   try {
     await all((driver) => driver.wait(() => waitUntilLevel(driver, level), 8000));
   } catch (e) {
     console.log('Test error flag gorilla');
-    //console.error(e); console.trace(); return;
     throw e;
   }
 
@@ -91,35 +137,48 @@ async function test(text, $ynced) {
     await all((driver) => driver.wait(() => waitUntilLevel(driver, level), 8000));
   } catch (e) {
     console.log('Test error flag dolphin');
-    // console.error(e); console.trace(); return;
     throw e;
   }
+}
 
-  let comparisons;
-  let $data;
-  const name = $ynced.$info().name;
-  const type = getType($ynced);
+async function testFailure(text, server, name) {
+  await incrementLevel(text);
+
+  let failure = false;
   for (let driver of drivers) {
-    try {
-      await driver.wait(async () => {
-        $data = await driver.executeScript(`return jsynchronous('${type}', '${name}')`);
-        const equality = deepComparison($data, $ynced);
-        if (equality) {
-          return true;
-        } else {
-          return null;
+    // TODO: Replace with cyclic check for data
+    if (true) {
+      try {
+        let $data;
+        if (await nonCyclicEquality(driver, name, server, $data)) {
+          console.log(util.inspect(server, {depth: 1, colors: true}));
+          console.log('----------------------------------------------------------------');
+          console.log(util.inspect($data, {depth: 1, colors: true}));
+          throw `Test of non-cyclic failure did not result in failure!`;
         }
-      }, 8000);
-    } catch (e) {
-      console.error(e);
-      console.log(util.inspect($data, {depth: 1, colors: true}));
-      console.log('----------------------------------------------------------------');
-      console.log(util.inspect($ynced, {depth: 1, colors: true}));
-      console.log();
-      //console.error(e); console.trace(); return;
+
+        if (await fullEquality(driver, name, server)) {
+          console.log(util.inspect(server, {depth: 1, colors: true}));
+          console.log('----------------------------------------------------------------');
+          console.log(`http://localhost:${port} jsynchronous('${detailedType(server)}', '${name}')`);
+          throw `Test of cyclic failure did not result in failure!`;
+        }
+      } catch (e) {
+        throw e;
+      }
     }
   }
 }
+async function waitUntilLevel(driver, level) {
+  const $levels = await driver.executeScript("return jsynchronous('object')");
+  if ($levels && $levels.level === level) {
+    return true;
+  } else {
+    return null;
+  }
+}
+
+
 
 async function all(fn) {
   if (fn.then) {
@@ -129,12 +188,87 @@ async function all(fn) {
   }
 }
 
-async function waitUntilLevel(driver, level) {
-  const $levels = await driver.executeScript("return jsynchronous('object')");
-  if ($levels && $levels.level === level) {
+
+async function nonCyclicEquality(driver, name, $erver, $client) {
+  const type = Array.isArray($erver) ? 'array' : 'object';
+  $client = await driver.executeScript(`return jsynchronous('${type}', '${name}')`);
+  // The above code will error on circular data structures. DAGs will have redundant portions of data
+  const equality = deepComparison($erver, $client);
+  if (equality) {
     return true;
   } else {
     return null;
+  }
+}
+
+async function fullEquality(driver, name, $erver, props, visited) {
+  // In order to work around Selenium's inability to return executeScript() values that have cyclic references, 
+  // we need to recursively ask the browser what the type and value of each property attached to $erver, compare 
+  // it to the type and value here on the server. Object keys and references also should match.
+  if (props === undefined) props = [];
+  if (visited === undefined) visited = new Map();
+
+  const type = detailedType($erver);
+  const proplist = props.length > 0 ? "['" + props.join("']['") + "']" : "";
+  const clientType = await driver.executeScript(`return detailedType(jsynchronous('${type}', '${name}')${proplist})`);
+
+  if (detailedType($erver) !== clientType) {
+    // console.log('a', detailedType($erver), clientType, $erver, proplist);
+    return null;
+  }
+
+  if (type === 'array' || type === 'object') {
+    const clientKeys = await driver.executeScript(`return Object.keys(jsynchronous('${type}', '${name}')${proplist});`);
+    const serverKeys = Object.keys($erver);
+    if (clientKeys.length !== serverKeys.length) {
+      // console.log('b', serverKeys, clientKeys, clientKeys.length, serverKeys.length);
+      return null;
+    }
+    for (let i=0; i<serverKeys.length; i++) {
+      if (clientKeys.indexOf(serverKeys[i]) === -1) {
+        // console.log('c', serverKeys, clientKeys);
+        return null;
+      }
+    }
+
+    if (visited.has($erver)) {
+      const proplist2 = visited.get($erver).length > 0 ? "['" + visited.get($erver).join("']['") + "']" : '';
+      const sameReference = await driver.executeScript(`return jsynchronous('${type}', '${name}')${proplist} === jsynchronous('${type}', '${name}')${proplist2};`);
+
+      if (sameReference) {
+        // console.log('z', $erver, sameReference);
+        return true;
+      } else {
+        // console.log('d', sameReference);
+        return null;
+      }
+    }
+    visited.set($erver, props);
+
+    let equality = true;
+    for (let prop in $erver) {
+      const $value = $erver[prop];
+      const clonedProps = props.slice();
+      clonedProps.push(prop);
+      if (await fullEquality(driver, name, $value, clonedProps, visited) !== true) {
+        equality = false;
+      }
+    }
+
+    if (equality === false) {
+      return null;
+    } else {
+      return true;
+    }
+  } else {
+    const $clientData = await driver.executeScript(`return jsynchronous('${type}', '${name}')${proplist};`);
+
+    if ($clientData === $erver) {
+      return true;
+    } else {
+      // console.log('e', $erver, $clientData);
+      return null;
+    }
   }
 }
 
@@ -146,60 +280,11 @@ function randomHash() {
   return Math.random().toString(36).substring(2);
 }
 
-function getType(enumerable) {
-  return (Array.isArray(enumerable) ? 'array' : 'object');
-}
-
-async function test0() {
-  console.log('Test 0 - Testing deepComparison function on known values');
-
-  // Matching tests
-  if (!deepComparison({a: 'a'}, {a: 'a'}))     throw `Test 0 failed - Deep comparison failed check 0`;
-  if (!deepComparison([], []))                 throw `Test 0 failed - Deep comparison failed check 1`;
-  if (!deepComparison([[]], [[]]))             throw `Test 0 failed - Deep comparison failed check 2`;
-  if (!deepComparison([{a: 'a'}], [{a: 'a'}])) throw `Test 0 failed - Deep comparison failed check 3`;
-
-  const circular1 = [];
-  const circular2 = [];
-  circular1[0] = circular1;
-  circular2[0] = circular2;
-  if (!deepComparison(circular1, circular2)) throw `Test 0 failed - Deep comparison failed check 4`;
-
-  const circular3 = {a: {b: {c: undefined}}}
-  const circular4 = {a: {b: {c: undefined}}}
-  circular3.a.b.c = circular3;
-  circular4.a.b.c = circular4;
-  if (!deepComparison(circular3, circular4)) throw `Test 0 failed - Deep comparison failed check 5`;
-
-
-  // Negative tests
-  if (deepComparison({a: 'b'}, {a: 'c'})) throw `Test 0 failed - Deep comparison failed check 6`
-  if (deepComparison({a: {b: {c: 'z'}}}, {a: {b: {c: 'y'}}})) throw `Test 0 failed - Deep comparison failed check 7`
-  if (deepComparison([0, 1, 2, 3], [0, 1, 2])) throw `Test 0 failed - Deep comparison failed check 8`
-  if (deepComparison([0, 1, 2, 3], [0, 1, 2, '3'])) throw `Test 0 failed - Deep comparison failed check 9`
-  if (deepComparison([[[]]], [[[0]]])) throw `Test 0 failed - Deep comparison failed check 10`
-
-  const circular5 = {x: {y: {z: undefined}}}
-  const noncircular = {x: {y: {z: undefined}}}
-  circular5.x.y.z = circular5.x;
-  if (deepComparison(circular5, noncircular)) throw `Test 0 failed - Deep comparison failed check 10`
-
-  return true;
-}
 
 
 function deepComparison(left, right, visited) {
   if (visited === undefined) visited = new Map();
 
-  if (visited.has(left)) {
-    if (visited.get(left) !== right) {
-      return false;
-    } else {
-      return true;
-    }
-  }
-
-  visited.set(left, right);
 
   const leftKeys = Object.keys(left);
   const rightKeys = Object.keys(right);
@@ -230,14 +315,40 @@ function deepComparison(left, right, visited) {
         return false;
       }
     } else if (typeof l === 'object') {
-      if (deepComparison(l, r, visited) === false) {
-        return false;
+      if (!visited.has(left)) {
+        visited.set(left, right);
+
+        if (deepComparison(l, r, visited) === false) {
+          return false;
+        }
       }
     }
   }
 
   return true;
 }
+function detailedType(value) {
+  const type = typeof value;
+  if (type !== 'object') {
+    return type;  // 'boolean' 'string' 'undefined' 'number' 'bigint' 'symbol'
+  } else if (value === null) {
+    return 'null';  // Special case made for typeof null === 'object'
+  } else if (type === 'function') {
+    return 'function';
+  } else if (value.constructor && value.constructor() === 'object') {
+    return 'object';  // Easy catch-all for object type
+  } else if (value instanceof Date) {
+    return 'date';
+  } else if (value instanceof RegExp) {
+    return 'regex';
+  } else if (Array.isArray(value)) {
+    return 'array';
+  } else {
+    return 'object'  // If we can't figure out what it is, most things in javascript are objects
+  }
+}
+
+
 
 // ----------------------------------------------------------------
 // Start test

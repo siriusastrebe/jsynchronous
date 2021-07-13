@@ -614,6 +614,9 @@ class JSynchronous {
       jsynchronous.send(websocket, JSON.stringify(payload));
     }
   }
+  sanityCheck() {
+    // Visit each node. Make sure this.objects contains all visited nodes, and no other nodes.
+  }
   copy(target, visited) {
     if (visited === undefined) visited = new Map();
     if (target === undefined) target = this.root.proxy;

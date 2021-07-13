@@ -13,6 +13,38 @@
     document.body.innerHTML = JSON.stringify($ynced);
   });
 
+
+  const knownValue1 = {
+    und: undefined,
+    nul: null,
+    num: 12345,
+    str: 'abcdefg',
+    uni: '☢☤☯✡⚡',
+    arr: [[-1], [-2], [-3], [-4]],
+    obj: {a: {b: {c: 'd'}}}
+  }
+
+  function detailedType(value) {
+    const type = typeof value;
+    if (type !== 'object') {
+      return type;  // 'boolean' 'string' 'undefined' 'number' 'bigint' 'symbol'
+    } else if (value === null) {
+      return 'null';  // Special case made for typeof null === 'object'
+    } else if (type === 'function') {
+      return 'function';
+    } else if (value.constructor && value.constructor() === 'object') {
+      return 'object';  // Easy catch-all for object type
+    } else if (value instanceof Date) {
+      return 'date';
+    } else if (value instanceof RegExp) {
+      return 'regex';
+    } else if (Array.isArray(value)) {
+      return 'array';
+    } else {
+      return 'object'  // If we can't figure out what it is, most things in javascript are objects
+    }
+  }
+
 </script>
 <body>
 </body>
