@@ -29,12 +29,27 @@ const io = new Server(server);
 const connections = [];
 
 io.on('connection', (socket) => {
-  $test.$ync(socket);  
+  console.log('Client connected')
+  let list = jsynchronous.variables();
+  for (let key in list) {
+    const $ynced = list[key];
+    $ynced.$ync(socket);  
+  };
+
   socket.on('msg', (data) => jsynchronous.onmessage(socket, data));
   connections.push(socket);
 
   socket.on('disconnect', () => {
-    $test.$unsync(socket);
+    list = jsynchronous.variables();
+    let disconnect = false;
+    for (let key in list) {
+      const $ynced = list[key];
+      if ($ynced.$listeners().indexOf(socket) !== -1) {
+        disconnect = true;
+        $ynced.$unsync(socket);
+      }
+    }
+    if (disconnect) console.log('Client disconnected');
     const index = connections.indexOf(socket);
     if (index !== -1) connections.splice(index, 1);
   });
@@ -65,24 +80,25 @@ const runTests = (async () => {
 
     const $array1 = jsynchronous([], 'array1');
     connections.map((c) => $array1.$ync(c));
-    await test('Creating a new synchronized empty array', $array1);
+    await test('Creating an empty array', $array1);
 
     const data = [[16], null];
     data[1] = data[0];
     const $array2 = jsynchronous(data, 'array2');
     connections.map((c) => $array2.$ync(c));
-    await test('Creating synchronized basic directed acyclic graph using an array', $array2);
+    await test('Creating basic directed acyclic graph using an array', $array2);
 
     const array2 = $array2.$copy();
-    await test('Created a copy of the DAG, testing equality of copy', array2, 'array2');
-    
+    await test('Created a copy of the directed acyclic graph, testing equality of copy', array2, 'array2');
+
     array2[0][0] = 17;
     await testFailure('Modified the copy, testing for failure', array2, 'array2');
 
     $array2[0][0] = 17;
     await test('Modified the original in the same way, testing equality with the copy', array2, 'array2');
 
-
+    $array2.push($array2[0]);
+    await test('Added another reference to the directed acyclic graph', $array2, 'array2');
 
     const used = process.memoryUsage().heapUsed / 1024 / 1024;
     console.log(`All tests passed! Node memory footprint: ${Math.round(used * 100) / 100} MB`);
@@ -103,18 +119,16 @@ async function test(text, $erver, name) {
   await incrementLevel(text);
 
   for (let driver of drivers) {
-    // TODO: Replace with cyclic check for data
-    if (true) {
-      let $data;
-      try {
-        await driver.wait(() => nonCyclicEquality(driver, name, $erver, $data), 8000);
-        await driver.wait(() => fullEquality(driver, name, $erver), 8000);
-      } catch (e) {
-        console.log(util.inspect($erver, {depth: 1, colors: true}));
-        console.log('----------------------------------------------------------------');
-        console.log(util.inspect($data, {depth: 1, colors: true}));
-        throw e;
-      }
+    let $dataRef;
+    try {
+      // TODO: skip nonCyclicEquality if cycles are detected
+      await driver.wait(() => nonCyclicEquality(driver, name, $erver, $dataRef), 8000);
+      await driver.wait(() => fullEquality(driver, name, $erver), 8000);
+    } catch (e) {
+      console.log(util.inspect($erver, {depth: 1, colors: true}));
+      console.log('----------------------------------------------------------------');
+      console.log(util.inspect($dataRef, {depth: 1, colors: true}));
+      throw e;
     }
   }
 }
@@ -146,27 +160,26 @@ async function testFailure(text, server, name) {
 
   let failure = false;
   for (let driver of drivers) {
-    // TODO: Replace with cyclic check for data
-    if (true) {
-      try {
-        let $data;
-        if (await nonCyclicEquality(driver, name, server, $data)) {
-          console.log(util.inspect(server, {depth: 1, colors: true}));
-          console.log('----------------------------------------------------------------');
-          console.log(util.inspect($data, {depth: 1, colors: true}));
-          throw `Test of non-cyclic failure did not result in failure!`;
-        }
-
-        if (await fullEquality(driver, name, server)) {
-          console.log(util.inspect(server, {depth: 1, colors: true}));
-          console.log('----------------------------------------------------------------');
-          console.log(`http://localhost:${port} jsynchronous('${detailedType(server)}', '${name}')`);
-          throw `Test of cyclic failure did not result in failure!`;
-        }
-      } catch (e) {
-        throw e;
+    try {
+      let $dataRef;
+      // TODO: skip nonCyclicEquality if cycles are detected
+      if (await nonCyclicEquality(driver, name, server, $dataRef)) {
+        console.log(util.inspect(server, {depth: 1, colors: true}));
+        console.log('----------------------------------------------------------------');
+        console.log(util.inspect($dataRef, {depth: 1, colors: true}));
+        throw `Test of non-cyclic failure did not result in failure!`;
       }
+
+      if (await fullEquality(driver, name, server)) {
+        console.log(util.inspect(server, {depth: 1, colors: true}));
+        console.log('----------------------------------------------------------------');
+        console.log(`http://localhost:${port} jsynchronous('${detailedType(server)}', '${name}')`);
+        throw `Test of cyclic failure did not result in failure!`;
+      }
+    } catch (e) {
+      throw e;
     }
+    
   }
 }
 async function waitUntilLevel(driver, level) {

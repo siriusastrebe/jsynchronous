@@ -752,6 +752,17 @@ jsynchronous.onmessage = (websocket, data) => {
   }
 }
 
+jsynchronous.list = () => {
+  return Object.keys(syncedNames);
+}
+jsynchronous.variables = () => {
+  const variables = {}
+  for (let name in syncedNames) {
+    variables[name] = syncedNames[name].root.proxy;
+  }
+  return variables;
+}
+
 if (typeof module === 'object') {
   module.exports = jsynchronous;
 }

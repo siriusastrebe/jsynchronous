@@ -87,6 +87,13 @@ function jsynchronousSetup() {
       throw errorString;
     }
   }
+  function variables() {
+    var variables = {}
+    for (var name in jsyncs) {
+      variables[name] = jsyncs[name].root.variable;
+    }
+    return variables;
+  }
   function list() {
     return Object.keys(jsyncs);
   }
@@ -756,6 +763,7 @@ function jsynchronousSetup() {
   jsynchronous = get;
   jsynchronous.onmessage = onmessage;
   jsynchronous.list = list;
+  jsynchronous.variables = variables;
 }
 jsynchronousSetup();
 
