@@ -89,21 +89,26 @@ async function startTest() {
   await test('Assignment of key to a unicode character');
 
 
+  $erved.bball['undefined'] = undefined;
+  await test('Assignment of an undefined value');
+
+  $erved.bball[undefined] = 'defined';
+  await test('Assignment of an undefined property');
+
+  $erved.bball['null'] = null;
+  await test('Assignment of a null value');
+
   $erved.bball['🐊'] = "Aligator?";
   await test('Reassignment of unicode character key');
 
-  
   $erved.bball = {};
   await test('Reassignment of an object');
-
 
   $erved.bball['emojis'] = "🔫😍🙈❄↕⚡⚠⚽🌍🐓🐬";
   await test('Assignment of a property on new object');
 
-
   $erved.bball['emojis'] += "🔫😍🙈❄↕⚡⚠⚽🌍🐓🐬";
   await test('Extending a unicode string');
-
 
   $erved.bball['genesis'] = largeText();
   await test('Assignment of a large piece of text');
@@ -111,22 +116,17 @@ async function startTest() {
   $erved.bball['genesis'] += largeText2()
   await test('Extending a large piece of text');
 
-
   delete $erved.bball['genesis']
   await test('Deletion of large text');
-
 
   $erved.bball['numbers'] = 0;
   await test('Assignment of an integer');
 
-
   $erved.bball['numbers'] = 0.12345678790;
   await test('Assignment of a floating point number');
 
-
   $erved.bball['numbers'] = 5.67;
   await test('Assignment of a floating point number with fixed precision');
-
 
   $erved.bball['numbers'] = 1.1;
   $erved.bball['numbers'] = 2.2;
@@ -135,11 +135,9 @@ async function startTest() {
   $erved.bball['numbers'] = 5.5;
   await test('Assignment of numbers in quick succession');
 
-
   const externalReference = $erved.bball['numbers'];
   $erved.bball.numbersExternalReference = externalReference;
   await test('Assignment of an external object referencing an existing synchronized variable');
-
 
   delete $erved.bball
   await test('Deletion of object');
@@ -172,44 +170,34 @@ async function startTest() {
   $erved.arr = [];
   await test('Assignment of empty array');
 
-
   $erved.arr = [0];
   await test('Ressignment of array, with a value this time');
 
-
   $erved.arr = [[]];
   await test('Reassignment of a nested array');
-
 
   $erved.arr = [[[]]];
   await test('Reassignment of a doubly nested array');
 
-
   $erved.arr = [[[[]]]];
   await test('Reassignment of a triply nested array');
-
 
   $erved.arr = [[[[[]]]]];
   await test('Reassignment of a quadruply nested array');
 
-
   $erved.arr = [[]];
   await test('Reassignment of a nested array');
 
-
   $erved.arr[0].push('zero')
   await test('Assignment into a nested array');
-
 
   $erved.arr[0].push('one')
   $erved.arr[0].push('two')
   await test('Multiple assignments into a nested array');
 
-
   $erved.arr.push('zero')
   $erved.arr[0].push('three')
   await test('Multiple assignments into different levels of a nested array');
-
 
   $erved.arr.push([[[5, 4, 3, 2, 1, 0, [['liftoff']], ]]])
   await test('Assignment of a deeply nested array with values');
@@ -231,8 +219,10 @@ async function startTest() {
   delete $erved.arr[2];
   await test('Multiple deletions of array entries');
 
+
   $erved.arr.length = 0;
   await test('Setting array length to a value smaller than the current length');
+
 
   $erved.arr[10] = 10;
   await test('Assigning an array property greater than the length of the array');
@@ -697,7 +687,7 @@ function deepComparison(left, right, visited) {
       if (l !== r) {
         return false;
       }
-    } else if (typeof l === 'object') {
+    } else if (typeof l === 'object' && l !== null) {
       if (deepComparison(l, r, visited) === false) {
         return false;
       }

@@ -100,6 +100,19 @@ const runTests = (async () => {
     $array2.push($array2[0]);
     await test('Added another reference to the directed acyclic graph', $array2, 'array2');
 
+    $array2[1] = 23;
+    await test('Replaced a reference to a sub-array with a number', $array2, 'array2');
+
+    $array2[0][0] = [[[97, 98]]];
+    await test('Replaced a referenced sub-array with a more deeply nested array', $array2, 'array2');
+
+    delete $array2[2];
+    await test('Deleted a reference to an sub-array', $array2, 'array2');
+
+    delete $array2[0];
+    await test('Deleted the last reference to an sub-array', $array2, 'array2');
+
+
     const used = process.memoryUsage().heapUsed / 1024 / 1024;
     console.log(`All tests passed! Node memory footprint: ${Math.round(used * 100) / 100} MB`);
   } catch (e) {
@@ -123,11 +136,20 @@ async function test(text, $erver, name) {
     try {
       // TODO: skip nonCyclicEquality if cycles are detected
       await driver.wait(() => nonCyclicEquality(driver, name, $erver, $dataRef), 8000);
-      await driver.wait(() => fullEquality(driver, name, $erver), 8000);
     } catch (e) {
+      console.log('No match on non-cyclic equality check');
       console.log(util.inspect($erver, {depth: 1, colors: true}));
       console.log('----------------------------------------------------------------');
       console.log(util.inspect($dataRef, {depth: 1, colors: true}));
+      throw e;
+    }
+
+    try {
+      await driver.wait(() => fullEquality(driver, name, $erver), 8000);
+    } catch (e) {
+      console.log('No match on cyclic equality check');
+      console.log(util.inspect($erver, {depth: 1, colors: true}));
+      console.log('----------------------------------------------------------------');
       throw e;
     }
   }
@@ -206,7 +228,8 @@ async function nonCyclicEquality(driver, name, $erver, $client) {
   const type = Array.isArray($erver) ? 'array' : 'object';
   $client = await driver.executeScript(`return jsynchronous('${type}', '${name}')`);
   // The above code will error on circular data structures. DAGs will have redundant portions of data
-  const equality = deepComparison($erver, $client);
+  const equality = deepComparison(JSON.parse(JSON.stringify($erver)), $client);
+  // console.log($client, $erver, equality);
   if (equality) {
     return true;
   } else {
@@ -298,7 +321,6 @@ function randomHash() {
 function deepComparison(left, right, visited) {
   if (visited === undefined) visited = new Map();
 
-
   const leftKeys = Object.keys(left);
   const rightKeys = Object.keys(right);
 
@@ -327,7 +349,7 @@ function deepComparison(left, right, visited) {
       if (l !== r) {
         return false;
       }
-    } else if (typeof l === 'object') {
+    } else if (typeof l === 'object' && l !== null) {
       if (!visited.has(left)) {
         visited.set(left, right);
 

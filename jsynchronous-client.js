@@ -68,7 +68,7 @@ function jsynchronousSetup() {
     }
   }
 
-  function get(standInType, name) {
+  function get(type, name) {
     var existing;
     if (!name) {
       name = '';
@@ -76,8 +76,8 @@ function jsynchronousSetup() {
 
     if (jsyncs[name]) {
       return jsyncs[name].root.variable;
-    } else if (standInType) {
-      return standInVariable(standInType, name);
+    } else if (type) {
+      return standInVariable(type, name);
     } else {
       var errorString = "jsynchronous() error - No synchronized variable available by name '" + name + "'. ";
       if (Object.keys(jsyncs).length === 0) {
