@@ -615,7 +615,70 @@ class JSynchronous {
     }
   }
   sanityCheck() {
+    // Sanity Check is used during testing to ensure the internal consistency of the jsynchronous data structure.
     // Visit each node. Make sure this.objects contains all visited nodes, and no other nodes.
+    // Make sure that each parent for each node is tracked accurately, and that the node has no other parents
+
+    const nodes = recurse(this.root.proxy, true);
+    const hashes = Object.keys(this.objects);
+    nodes.forEach((n) => {
+      const syncedObject = n[jsynchronous.reserved_property];
+      const index = hashes.indexOf(syncedObject.hash);
+      if (index > -1) {
+        hashes.splice(index, 1);
+      } else {
+        throw `Jsynchronous Sanity check error - Object ${syncedObject.hash} reachable from the root isn't registered in jsync.objects`;
+      }
+    });
+
+    if (hashes.length > 0) {
+      throw `Jsynchronous Sanity check error - ${hashes.length} objects referenced in jsync.objects isn't reachable from the root`;
+    }
+
+    const referencedBy = {} // Key->value corresponds to hash->[hashes of all parents]
+
+    nodes.forEach((n) => {
+      const syncedObject = n[jsynchronous.reserved_property];
+      for (let hash in n.parents) {
+        const properties = n.parents[hash];
+        const parent = this.objects[hash];
+        properties.forEach((p) => {
+          if (parent.variable[p] !== syncedObject.variable) {
+            throw `Jsynchronous Sanity check error - Internal parent data of ${syncedObject.hash} doesn't match parent ${parent.hash} properties`;
+          }
+        });
+      }
+
+      for (let prop in n.variable) {
+        const child = n.variable[prop];
+        if (enumerable(child)) {
+          const childHash = child[jsynchronous.reserved_property].hash;
+          if (referencedBy[childHash] === undefined) { referencedBy[childHash] = [n.hash]; }
+          else { referencedBy[childHash].push(n.hash); }
+
+          if (child.parents[n.hash] === undefined) {
+            throw `Jsynchronous Sanity check error - Child of ${n.hash} at property ${prop} isn't tracking it as a parent`
+          }
+
+          if (child.parents[n.hash].indexOf(prop) === -1) {
+            throw `Jsynchronous Sanity check error - Child of ${n.hash} is missing a reference at ${prop}`
+          }
+        }
+      }
+    });
+
+    for (let hash in referencedBy) {
+      const n = this.objects[hash];
+      const parentHashes = referencedBy[hash];
+      parentHashes.forEach((hash) => {
+        if (n.parents[hash] === undefined) {
+          // This should already have been covered by a check several lines above this
+          throw `Jsynchronous Sanity check error - ${n.hash} is referenced by a parent ${hash} that it isn't tracking.`;
+        } else if (n.parents[hash].length !== parentHashes.filter((h) => h === hash).length) {
+          throw `Jsynchronous Sanity check error - ${n.hash}'s record of its parent ${hash} has an inaccurate number of properties`;
+        }
+      });
+    }
   }
   copy(target, visited) {
     if (visited === undefined) visited = new Map();
@@ -900,25 +963,24 @@ function enumerate(obj, func) {
 }
 
 function recurse(obj, includeObj, terminateFunc, visited) {
-  // Returns all nodes in breadth first order. Returns descendants only if includeObj is false. Terminates after adding if terminateFunc returns true
-  visited = visited || [];
+  // Returns all nodes in depth first order. Returns descendants only if includeObj is false. Terminates after adding if terminateFunc returns true
+  visited = visited || new Map();
 
   if (includeObj) {
-    visited.push(obj);
+    visited.set(obj, true);
   }
 
   if (terminateFunc && terminateFunc(obj)) {
-    return visited;
+    return [...visited.keys()];
   }
 
   enumerate(obj, (value, prop) => {
-    // TODO: indexOf() is an O(n) algorithm. Maybe more efficient as a Map? Only testing can truly say
-    if (enumerable(value) && visited.indexOf(value) === -1) {
+    if (enumerable(value) && !visited.has(value)) {
       recurse(value, true, terminateFunc, visited);
     }
   });
 
-  return visited;
+  return [...visited.keys()];
 }
 function findRecursively(obj, conditionFunc) {
   const visited = recurse(obj, true, conditionFunc);

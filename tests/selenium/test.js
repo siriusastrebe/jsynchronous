@@ -78,15 +78,35 @@ const runTests = (async () => {
 
     await test(`Editing property of primary jsynchronous object`, $test);
 
+    const primitives = {
+      pi: Math.PI,
+      zero: 0,
+      //inf: Infinity,
+      //neginf: -Infinity,
+      und: undefined,
+      null: null,
+      str: '§†®îñG',
+      negative: -1234567890,
+      rounded: 0.123456789012345678901234567890,
+      tru: true,
+      fal: false,
+      // big: BigInt(99999999999999999999999999999999999999999999999999),
+    }
+
+    const $primitives = jsynchronous(primitives, 'primitives');
+    connections.map((c) => $primitives.$ync(c));
+    await test('Created an object containing various primitive values', $primitives, 'primitives', true);
+
     const $array1 = jsynchronous([], 'array1');
     connections.map((c) => $array1.$ync(c));
     await test('Creating an empty array', $array1);
 
-    const data = [[16], null];
-    data[1] = data[0];
-    const $array2 = jsynchronous(data, 'array2');
+    const array2Data = [[16], null];
+    array2Data[1] = array2Data[0];
+    const $array2 = jsynchronous(array2Data, 'array2');
     connections.map((c) => $array2.$ync(c));
     await test('Creating basic directed acyclic graph using an array', $array2);
+
 
     const array2 = $array2.$copy();
     await test('Created a copy of the directed acyclic graph, testing equality of copy', array2, 'array2');
@@ -106,12 +126,49 @@ const runTests = (async () => {
     $array2[0][0] = [[[97, 98]]];
     await test('Replaced a referenced sub-array with a more deeply nested array', $array2, 'array2');
 
+    // $array2['__jsynchronous__'].jsync.sanityCheck();
+
     delete $array2[2];
     await test('Deleted a reference to an sub-array', $array2, 'array2');
 
     delete $array2[0];
-    await test('Deleted the last reference to an sub-array', $array2, 'array2');
+    await test('Deleted the last remaining reference to an sub-array', $array2, 'array2');
 
+    // $array2['__jsynchronous__'].jsync.sanityCheck();
+
+
+
+    const array3 = [];
+    array3[0] = array3;
+    const $array3 = jsynchronous(array3, 'array3');
+    connections.map((c) => $array3.$ync(c));
+    await test('Created basic circular data structure with arrays', $array3, 'array3');
+
+
+    const array4Data = [[[null]]];
+    array4Data[0][0][0] = array4Data[0];
+    const $array4 = jsynchronous(array4Data, 'array4');
+    connections.map((c) => $array4.$ync(c));
+    await test('Created a more involved circular data structure with arrays', $array4, 'array4');
+
+    const array4 = $array4.$copy();
+    await test('Created a copy of the circular data structure, testing for equality with copy', array4, 'array4');
+
+    array4[0][0][0] = array4[0][0];
+    await testFailure('Changed the copy, testing for failure', array4, 'array4');
+
+    $array4[0][0][0] = $array4[0][0];
+    await test('Changed the original, testing the copy against the original for equivalence', array4, 'array4');
+
+    const alphabetData = {a: {b: {c: {d: {e: {f: {g: {h: {i: {j: {k: {l: {m: {n: {o: {p: {q: {r: {s: {t: {u: {v: {w: {x: {y: {z: null}}}}}}}}}}}}}}}}}}}}}}}}}};
+    alphabetData.a.b.c.d.e.f.g.h.i.j.k.l.m.n.o.p.q.r.s.t.u.v.w.x.y.z = alphabetData;
+    const $alphabet = jsynchronous(alphabetData, 'alphabet');
+    connections.map((c) => $alphabet.$ync(c));
+    await test('Created a large circular data structure using objects', $alphabet, 'alphabet');
+
+
+
+    
 
     const used = process.memoryUsage().heapUsed / 1024 / 1024;
     console.log(`All tests passed! Node memory footprint: ${Math.round(used * 100) / 100} MB`);
@@ -124,7 +181,7 @@ const runTests = (async () => {
   return true;
 });
 
-async function test(text, $erver, name) {
+async function test(text, $erver, name, skipJson) {
   if (name === undefined) {
     name = $erver.$info().name;
   }
@@ -133,21 +190,22 @@ async function test(text, $erver, name) {
 
   for (let driver of drivers) {
     let $dataRef;
-    try {
-      // TODO: skip nonCyclicEquality if cycles are detected
-      await driver.wait(() => nonCyclicEquality(driver, name, $erver, $dataRef), 8000);
-    } catch (e) {
-      console.log('No match on non-cyclic equality check');
-      console.log(util.inspect($erver, {depth: 1, colors: true}));
-      console.log('----------------------------------------------------------------');
-      console.log(util.inspect($dataRef, {depth: 1, colors: true}));
-      throw e;
+    if (!isCyclic($erver) && skipJson !== true) {
+      try {
+        await driver.wait(() => jsonEquality(driver, name, $erver, $dataRef), 8000);
+      } catch (e) {
+        console.log('No match on json equality check');
+        console.log(util.inspect($erver, {depth: 1, colors: true}));
+        console.log('----------------------------------------------------------------');
+        console.log(util.inspect($dataRef, {depth: 1, colors: true}));
+        throw e;
+      }
     }
 
     try {
       await driver.wait(() => fullEquality(driver, name, $erver), 8000);
     } catch (e) {
-      console.log('No match on cyclic equality check');
+      console.log('No match on full equality check');
       console.log(util.inspect($erver, {depth: 1, colors: true}));
       console.log('----------------------------------------------------------------');
       throw e;
@@ -177,31 +235,31 @@ async function incrementLevel(text) {
   }
 }
 
-async function testFailure(text, server, name) {
+async function testFailure(text, server, name, skipJson) {
   await incrementLevel(text);
 
   let failure = false;
   for (let driver of drivers) {
     try {
-      let $dataRef;
-      // TODO: skip nonCyclicEquality if cycles are detected
-      if (await nonCyclicEquality(driver, name, server, $dataRef)) {
-        console.log(util.inspect(server, {depth: 1, colors: true}));
-        console.log('----------------------------------------------------------------');
-        console.log(util.inspect($dataRef, {depth: 1, colors: true}));
-        throw `Test of non-cyclic failure did not result in failure!`;
+      if (!isCyclic(server) && skipJson !== true) {
+        let $dataRef;
+        if (await jsonEquality(driver, name, server, $dataRef)) {
+          console.log(util.inspect(server, {depth: 1, colors: true}));
+          console.log('----------------------------------------------------------------');
+          console.log(util.inspect($dataRef, {depth: 1, colors: true}));
+          throw `Test of json equality failure did not result in failure!`;
+        }
       }
 
       if (await fullEquality(driver, name, server)) {
         console.log(util.inspect(server, {depth: 1, colors: true}));
         console.log('----------------------------------------------------------------');
         console.log(`http://localhost:${port} jsynchronous('${detailedType(server)}', '${name}')`);
-        throw `Test of cyclic failure did not result in failure!`;
+        throw `Test of full equality failure did not result in failure!`;
       }
     } catch (e) {
       throw e;
     }
-    
   }
 }
 async function waitUntilLevel(driver, level) {
@@ -214,7 +272,6 @@ async function waitUntilLevel(driver, level) {
 }
 
 
-
 async function all(fn) {
   if (fn.then) {
     return await Promise.all(drivers.map(async (driver) => await fn(driver)));
@@ -224,7 +281,7 @@ async function all(fn) {
 }
 
 
-async function nonCyclicEquality(driver, name, $erver, $client) {
+async function jsonEquality(driver, name, $erver, $client) {
   const type = Array.isArray($erver) ? 'array' : 'object';
   $client = await driver.executeScript(`return jsynchronous('${type}', '${name}')`);
   // The above code will error on circular data structures. DAGs will have redundant portions of data
@@ -249,7 +306,7 @@ async function fullEquality(driver, name, $erver, props, visited) {
   const clientType = await driver.executeScript(`return detailedType(jsynchronous('${type}', '${name}')${proplist})`);
 
   if (detailedType($erver) !== clientType) {
-    // console.log('a', detailedType($erver), clientType, $erver, proplist);
+    //console.log('a', detailedType($erver), clientType, $erver, proplist);
     return null;
   }
 
@@ -299,7 +356,8 @@ async function fullEquality(driver, name, $erver, props, visited) {
   } else {
     const $clientData = await driver.executeScript(`return jsynchronous('${type}', '${name}')${proplist};`);
 
-    if ($clientData === $erver) {
+    if ($clientData === $erver || ($erver === undefined && $clientData === null)) {
+      // All data coming through executeScript gets cast as JSON, so undefined will convert to null
       return true;
     } else {
       // console.log('e', $erver, $clientData);
@@ -381,6 +439,24 @@ function detailedType(value) {
   } else {
     return 'object'  // If we can't figure out what it is, most things in javascript are objects
   }
+}
+
+function isCyclic(node, seen) {
+  seen = seen || [];
+  if (detailedType(node) === 'array' || detailedType(node) === 'object') {
+    if (seen.indexOf(node) !== -1) {
+      return true;
+    }
+
+    const clone = seen.slice();
+    clone.push(node);
+    for (let prop in node) {
+      if (isCyclic(node[prop], clone)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 
