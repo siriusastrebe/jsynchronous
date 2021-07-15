@@ -1,4 +1,4 @@
-# Jsynchronous
+# Jsynchronous.js
 
 Get your (rapidly changing) data from Node.js->Browser with ease. 
 
