@@ -52,14 +52,18 @@ const $ynced = jsynchronous(data);
 
 Jsynchronous does not lock you into a transportation medium you use whether it be [socket.io](https://socket.io/) [ws](https://www.npmjs.com/package/ws) [Primus](https://www.npmjs.com/package/primus), [EventSource](https://developer.mozilla.org/en-US/docs/Web/API/EventSource), or [webRTC](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API). Any protocol with eventual in-order delivery works. We will be using [Socket.io](https://socket.io/) in this example.
 
-The server side setup consists of 3 required steps: 1) Specify a jsynchronous.send function, 2) Create a synchronized variable by calling jsynchronous(), 3) Register connected websockets to your synchronized variable with .$ync(websocket)
+The server side setup consists of 3 required steps: 
+
+1) Specify a jsynchronous.send function
+2) Create a synchronized variable by calling jsynchronous(), 
+3) Register connected websockets to your synchronized variable with .$ync(websocket)
 
 ```javascript
 // Server side using socket.io
 const { Server } = require("socket.io"); 
 const jsynchronous = require('jsynchronous');
 
-jsynchronous.send = (websocket, data) => websocket.emit('msg', data);
+jsynchronous.send = (socket, data) => socket.emit('msg', data);
 
 const $matrix = jsynchronous([[1, 2], [3, 4]]);
 
@@ -70,7 +74,7 @@ io.on('connection', (socket) => {
 });
 ```
 
-The jsynchronous.send = (websocket, data) => {} function is automatically called by jsynchronous every time data needs to be sent to the client. It's up to you to write the code for transmitting the data to the client.
+The jsynchronous.send = (websocket, data) => {} function is automatically called by jsynchronous every time data needs to be sent to the client. In this example, it calls .emit(), a method of a socket.io websocket.
 
 Calling jsynchrounous() creates and returns a synchronized variable. In this example, `$matrix`. Calling `$matrix.$ync(websocket)` will make the synchronized variable visible to that websocket.
 
@@ -116,6 +120,7 @@ Calling jsynchronous() on the server once without providing a name will create a
 ```javascript
 // Browser side
 const $matrix = jsynchronous('array');
+```
 
 $matrix will return as a stand-in variable of the type provided if the client has not yet completed synchronization. Stand-in variables are just empty arrays or objects at first. When the client is sync and up to date the stand-in variable will update accordingly.
 
@@ -148,25 +153,24 @@ Jsynchronous will ensure synchronization occurs when the user reconnects - no ma
 In order to support resynchronization requests, client->server communication is required. You will have to define a client side jsynchronous.send function and make calls to the server side jsynchronous.onmessage(websocket, data). Similar to the earlier set up, but note how server side functions need a websocket passed in.
 
 ```javascript
-// Browser side 
-const socket = io();
-socket.on('msg', (data) => jsynchronous.onmessage(data));
-jsynchronous.send = (data) => socket.emit('msg', data));
-
-const $ynchronized = jsynchronous('object');
-```
-
-```javascript
 // Server side
 const $ynchronized = jsynchronous(['Quoth', 'the', 'raven', '"Nevermore."']);
 
-jsynchronous.send = (websocket, data) => websocket.emit('msg', data));
+jsynchronous.send = (socket, data) => socket.emit('msg', data));
 
 io.on('connection', (socket) => {
   $ynchronized.$ync(socket);
   socket.on('disconnect', () => $ynchronized.$unsync(socket));
   socket.on('msg', (data) => jsynchronous.onmessage(socket, data));
 });
+```
+```javascript
+// Browser side 
+const socket = io();
+socket.on('msg', (data) => jsynchronous.onmessage(data));
+jsynchronous.send = (data) => socket.emit('msg', data));
+
+const $ynchronized = jsynchronous('object');
 ```
 
 Setting up client->server communication makes your synchronized variables resistant to data loss and desynchronization. By default the client will give you a warning if you don't provide .send on client or .onmessage on server and will halt if messages are missed and no re-synchronization is possible. 
@@ -362,7 +366,7 @@ Server only. Removes the websocket from the list of clients.
 .$copy()
 ```
 
-Returns a deep copy of the synchronized variable. The returned variable is not synchronized.
+Server and client. Returns a deep copy of the synchronized variable. The returned variable is not synchronized.
 
 ```javascript
 .$on('changes', callback)

@@ -30,6 +30,7 @@ const clientReservedWords = {
   '$info': true,
   '$on': true,
   '$rewind': true,
+  '$copy': true,
 }
 
 const syncedNames = {};

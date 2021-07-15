@@ -20,14 +20,19 @@ const port = 3000;
 const $ynchronized = jsynchronous([], '', {rewind: true, $info: 'vf', $rewind: 'zz'});
 
 setInterval(() => {
-  $ynchronized.push($ynchronized.length);
-  if (Math.random() > 0.5) {
-    $ynchronized.push($ynchronized.length);
-  }
-  if (Math.random() > 0.5) {
-    $ynchronized.push($ynchronized.length);
-  }
-}, 600);
+  $ynchronized[0] = 0;
+}, 1000);
+
+
+//setInterval(() => {
+//  $ynchronized.push($ynchronized.length);
+//  if (Math.random() > 0.5) {
+//    $ynchronized.push($ynchronized.length);
+//  }
+//  if (Math.random() > 0.5) {
+//    $ynchronized.push($ynchronized.length);
+//  }
+//}, 600);
 
 // Express
 const server = app.listen(port, () => {

@@ -30,7 +30,8 @@ function jsynchronousSetup() {
   var clientReservedWords = {
     '$info': true,
     '$on': true,
-    '$rewind': true
+    '$rewind': true,
+    '$copy': true
   }
 
   var jsyncs = {}
@@ -628,6 +629,34 @@ function jsynchronousSetup() {
     }
   }
 
+  function copy(target, visited, mirrored) {
+    if (visited === undefined) visited = [];
+    if (mirrored === undefined) mirrored = [];
+
+    var index = visited.indexOf(target);
+    if (index !== -1) {
+      return mirrored[index];
+    }
+
+    const type = detailedType(target);
+
+    if (isPrimitive(type)) {
+      return target;
+    } else {
+      const mirror = newCollection(type, target);
+
+      visited.push(target);
+      mirrored.push(mirror);
+
+      enumerate(target, type, (value, prop) => {
+        mirror[prop] = copy(value, visited, mirrored);
+      });
+
+      return mirror;
+    }
+  }
+
+
   function addSynchronizedVariableMethods(jsync, targetVariable, reservedWords) {
     // targetVariable will be details.variable if it's synced. Otherwise it should be a stand-in variable
     for (var key in clientReservedWords) {
@@ -676,6 +705,13 @@ function jsynchronousSetup() {
       writable: true,
     });
 
+    Object.defineProperty(targetVariable, reservedWords['$copy'], { 
+      value: function $copy() {
+        return copy(jsync.root.variable);
+      },
+      writable: true,
+    });
+
     Object.defineProperty(targetVariable, reservedWords['$info'], { 
       value: function $info() {
         if (jsync.standIn) {
@@ -711,7 +747,6 @@ function jsynchronousSetup() {
       });
     }
   }
-
   function triggerChanges(jsync, callback) {
     for (var j=0; j<jsync.changesEvents.length; j++) {
       var e = jsync.changesEvents[j];
