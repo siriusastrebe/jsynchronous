@@ -81,8 +81,6 @@ const runTests = (async () => {
     const primitives = {
       pi: Math.PI,
       zero: 0,
-      //inf: Infinity,
-      //neginf: -Infinity,
       und: undefined,
       null: null,
       str: '§†®îñG',
@@ -90,16 +88,60 @@ const runTests = (async () => {
       rounded: 0.123456789012345678901234567890,
       tru: true,
       fal: false,
-      // big: BigInt(99999999999999999999999999999999999999999999999999),
+      //inf: Infinity, // Not yet supported
+      //neginf: -Infinity,
+      // big: BigInt(99999999999999999999999999999999999999999999999999), // executeScript is unable to handle BigInt
     }
 
     const $primitives = jsynchronous(primitives, 'primitives');
     connections.map((c) => $primitives.$ync(c));
     await test('Created an object containing various primitive values', $primitives, 'primitives', true);
 
-    const $array1 = jsynchronous([], 'array1');
+
+    const $array0 = jsynchronous([], 'array0');
+    connections.map((c) => $array0.$ync(c));
+    await test('Creating an empty array', $array0);
+
+    $array0.push(0, 1, 2, 3, 777, 4, 5, 5.5, 6, 7, 8, 9, 9.999999, 10);
+    await test('Pushed various numerical values onto the array', $array0);
+
+    $array0.reverse();
+    await test('Reversed the array', $array0);
+
+    $array0.sort();
+    await test('Sorted the array with the default javascript sort', $array0);
+
+    $array0.sort((a, b) => a-b);
+    await test('Sorted the array with a custom javascript sort', $array0);
+
+    $array0.pop()
+    await test('Popped the last element off the array', $array0);
+
+    $array0.shift()
+    await test('Shifted the 0th element out of the array', $array0);
+
+    $array0.unshift('Pineapple');
+    await test('Unshifted an element onto the beginning of the array', $array0);
+
+    $array0.splice(3, 1, 'Kiwi', 'Chihuahua');
+    await test('Spliced away an element and added a few more in the same action', $array0);
+
+
+    const $array1 = jsynchronous([{z: 'z'}, 'y', ['x', 'w']], 'array1');
     connections.map((c) => $array1.$ync(c));
-    await test('Creating an empty array', $array1);
+    await test('Created an array with various default values', $array1);
+
+    $array1.push({v: [-23, 999, 0.987654321]});
+    await test('Pushing a nested data structure onto the array', $array1);
+
+    delete $array1[$array1.length-1];
+    await test('Deleted the the last element from the array', $array1);
+
+    $array1.splice(1, 1);
+    await test('Spliced an element from early in the array', $array1);
+
+    delete $array1[0];
+    await test('Deleted the first element from the array', $array1);
 
     const array2Data = [[16], null];
     array2Data[1] = array2Data[0];
@@ -136,8 +178,6 @@ const runTests = (async () => {
 
     // $array2['__jsynchronous__'].jsync.sanityCheck();
 
-
-
     const array3 = [];
     array3[0] = array3;
     const $array3 = jsynchronous(array3, 'array3');
@@ -166,6 +206,48 @@ const runTests = (async () => {
     connections.map((c) => $alphabet.$ync(c));
     await test('Created a large circular data structure using objects', $alphabet, 'alphabet');
 
+    $alphabet.a.b.c.d.e.f.g.h.i.j.k.l.m = null;
+    await test('Broke the circular link', $alphabet, 'alphabet');
+
+    // $alphabet['__jsynchronous__'].jsync.sanityCheck();
+
+    const selfLoopData = {}
+    for (let i=0; i<10; i++) {
+      selfLoopData[i] = {}
+      selfLoopData[i].loopback = selfLoopData[i];
+    }
+    $elfLoop = jsynchronous(selfLoopData, 'selfloop');
+    connections.map((c) => $elfLoop.$ync(c));
+    await test('Created a data structure with sub-objects that reference themselves using objects', $elfLoop, 'selfloop');
+
+    const multiLoopData = [];
+    for (let i=0; i<10; i++) {
+      multiLoopData[i] = [];
+      multiLoopData[i][0] = multiLoopData;
+    }
+    $multiLoop = jsynchronous(multiLoopData, 'multiloop');
+    connections.map((c) => $multiLoop.$ync(c));
+    await test('Created a data structure with sub-objects that references the root using arrays', $multiLoop, 'multiloop');
+
+    const completeGraphData = {a: {}, b: {}, c: {}};
+    completeGraphData.a.b = completeGraphData.b;
+    completeGraphData.a.c = completeGraphData.c;
+    completeGraphData.b.a = completeGraphData.a;
+    completeGraphData.b.c = completeGraphData.c;
+    completeGraphData.c.a = completeGraphData.a;
+    completeGraphData.c.b = completeGraphData.b;
+    $completeGraph = jsynchronous(completeGraphData, 'completegraph');
+    connections.map((c) => $completeGraph.$ync(c));
+    await test('Created a complete graph data structure where each object connects to each other object', $completeGraph, 'completegraph');
+
+    const completeGraph = $completeGraph.$copy();
+    await test('Created a copy of the complete graph, testing equality of copy', completeGraph, 'completegraph');
+
+    completeGraph.c.a = completeGraph.b;
+    await testFailure('Modified one edge of the complete graph, making it incomplete. Testing for failure.', completeGraph, 'completegraph');
+
+    $completeGraph.c.a = $completeGraph.b;
+    await test('Modified the original complete graph in the same way', completeGraph, 'completegraph');
 
 
     
@@ -357,7 +439,7 @@ async function fullEquality(driver, name, $erver, props, visited) {
     const $clientData = await driver.executeScript(`return jsynchronous('${type}', '${name}')${proplist};`);
 
     if ($clientData === $erver || ($erver === undefined && $clientData === null)) {
-      // All data coming through executeScript gets cast as JSON, so undefined will convert to null
+      // All data coming through executeScript gets cast as JSON, so undefined will look like null
       return true;
     } else {
       // console.log('e', $erver, $clientData);
