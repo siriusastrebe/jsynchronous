@@ -55,7 +55,7 @@ Jsynchronous does not lock you into a transportation medium you use whether it b
 The server side setup consists of 3 required steps: 
 
 1) Specify a jsynchronous.send function
-2) Create a synchronized variable by calling jsynchronous(), 
+2) Create a synchronized variable by calling jsynchronous() 
 3) Register connected websockets to your synchronized variable with .$ync(websocket)
 
 ```javascript
@@ -74,7 +74,7 @@ io.on('connection', (socket) => {
 });
 ```
 
-The jsynchronous.send = (websocket, data) => {} function is automatically called by jsynchronous every time data needs to be sent to the client. In this example, it calls .emit(), a method of a socket.io websocket.
+The jsynchronous.send = (websocket, data) => {} function is automatically called by jsynchronous every time data needs to be sent to the client. It must contain code to transmit data to the websocket client.
 
 Calling jsynchrounous() creates and returns a synchronized variable. In this example, `$matrix`. Calling `$matrix.$ync(websocket)` will make the synchronized variable visible to that websocket.
 
@@ -109,7 +109,7 @@ console.log(jsynchronous());
 
 Take a look at sample code at the [example setups](https://github.com/siriusastrebe/jsynchronous/tree/master/examples) for guidance.
 
-There's a 4th optional step of enabling browser->server communication, used to recover from network interruptions causing desynchronization, we'll discussed below.
+There's a 4th optional step of enabling browser->server communication, used to recover from network interruptions causing desynchronization which will be discussed below.
 
 # Stand-In variables
 
@@ -382,6 +382,7 @@ Client only. Creates an event which triggers callback when a snapshot is created
 
 ```javascript
 .$tart()
+```
 
 Server only. Used along side the {wait: true} option in the call to jsynchronous(), tells jsynchronous to start synchronizing the variable to $ync'ed clients.
 
@@ -407,7 +408,7 @@ Client only. Name can be a number or a string. Returns a non-synchronized variab
 
 ## How do I use my synchronized variable with React/Vue/Angular/Svelte?
 
-Use .$copy() on your synchronized variable to populate your initial state.
+Use .$copy() on the root of your synchronized variable to populate your initial state.
 
 Have an event listener .$on('change') to update the state.
 

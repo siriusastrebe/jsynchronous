@@ -1,3 +1,5 @@
+# Round-Trip Testing
+
 The controlling server creates a synchronized variable, the responding server relays the synchronized variable and any changes back at the controlling server.
 
 This is the idea behind round-trip testing. The controlling server can easily compare the values the synchronized variable and the relayed variable to see if they're equivalent. The relay server does not participate testing beyond being a reliable relay.
