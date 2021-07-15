@@ -249,14 +249,14 @@ Be careful when assigning object and arrays to synchronized variables. ALL of th
 On the flip side, you can reference a synchronized variable from other parts of your app. Changes to these references WILL synchronize:
 
 ```javascript
-const $quaternion = $ynced.orientation;
-$quaternion.i = 1; // Will synchronize
-$quaternion.w = 0; // Will synchronize
+const $orientation = $ynced.orientation;
+$orientation.i = 1; // Will synchronize
+$orientation.w = 0; // Will synchronize
 ```
 
 We recommended you use the prefix ‘$’ or some other convention when you reference a synchronized variable to indicate that assignments to that variable will be sent over the network.
 
-# Reference
+# Documentation Reference
 
 ## Jsynchronous methods
 
@@ -419,7 +419,7 @@ In a world of clunky transport stacks with limited expressiveness jsynchronous a
 
 ## Can jsynchronous really be used for games?
 
-TCP/IP, which all browsers rely on, can see increased latency in packet loss heavy conditions due to [head of line blocking](https://gafferongames.com/post/client_server_connection/). 
+TCP/IP, which all browsers rely on, can see increased latency in packet loss heavy conditions due to [head of line blocking](https://gafferongames.com/post/client_server_connection/#background). 
 
 If your game does not need millisecond level precision jsynchronous will keep your data perfectly synchronized as fast as the wire will carry it to every client your websockets can [handle](https://blog.jayway.com/2015/04/13/600k-concurrent-websocket-connections-on-aws-using-node-js/). For 90% of games Jsynchronous on top of TCP/IP is more than ideal. For quick twitch-speed shooter or fighting game, maybe not. 
 
