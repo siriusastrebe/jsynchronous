@@ -446,3 +446,9 @@ The reasoning behind this is that it's much harder to secure a client-side data-
 
 There are limits to using a reactive data structure like jsynchronous to manage bi-directional requests to change data. Even something as simple as an increment coming from multiple clients simultaneously might get lost in a last-write-wins heuristic because i++ looks the same as i=constant in the eyes of a getter/setter. Some data types may need more expressive operations than 'set' and 'delete'. Operational transforms need to be application, intent, and data-type specific to handle merge-conflicts, even server-><-client conflicts are easier to reason through an API than through a reactive data structure.
 
+
+# Support Jsynchronous
+
+Want to help out? Consider [donating](https://github.com/sponsors/siriusastrebe), all proceeds go towards development of jsynchronous. 
+
+[Reach out](http://www.asksiri.us/) if you would like to contribute code to this open source project.
