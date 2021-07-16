@@ -1,5 +1,5 @@
 const express = require('express');
-const jsynchronousClient = require('../../jsynchronous-client.js');
+const jsynchronousClient = require('jsynchronous/jsynchronous-client.js');
 const { Server } = require("socket.io");
 
 const app = express();
@@ -10,7 +10,7 @@ const $ynchronized = jsynchronousClient('object');
 // Express
 const server = app.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`);
-})
+});
 
 // Socket.io
 const io = new Server(server);
@@ -33,5 +33,5 @@ app.get('/', (req, res) => {
 })
 
 app.get('/jsynchronous.js', (req, res) => {
-  res.sendFile('/jsynchronous.js', {'root': '../../'});
+  res.sendFile('/node_modules/jsynchronous/jsynchronous.js', {'root': __dirname});
 })

@@ -92,7 +92,7 @@ or
 import jsynchronous from 'jsynchronous/jsynchronous-client.js';
 ```
 
-The second method requires a bundler like webpack.
+The first method needs to be served as a static asset. The second method requires a bundler like webpack.
 
 ```javascript
 // Browser side

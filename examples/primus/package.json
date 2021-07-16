@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "jsynchronous": "*",
+    "express": "4.17.1",
+    "primus": "8.0.4"
+  }
+}

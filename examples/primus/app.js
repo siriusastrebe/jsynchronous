@@ -1,11 +1,11 @@
 const express = require('express');
 const Primus = require('primus');
 const WebSocket = require('ws');
-const jsynchronous = require('../../jsynchronous.js');
+const jsynchronous = require('jsynchronous');
 
 jsynchronous.send = (websocket, data) => {
   websocket.write(data);
-  console.log(`${(data.length/1000).toFixed(2)} kB`);   
+  console.log(`${(data.length/1000).toFixed(2)} kB`);
 }
 
 const physics = {velocity: {x: 5, y: -2.04}};
@@ -19,6 +19,7 @@ setInterval(() => {
 // Primus websocket server
 const primus = Primus.createServer(function connection(spark) {
   $ynchronized.$ync(spark);
+  spark.on('data', (data) => jsynchronous.onmessage(spark, data));
   spark.on('end', function () {
     $ynchronized.$unsync(spark);
   });
@@ -37,7 +38,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/jsynchronous-client.js', (req, res) => {
-  res.sendFile('/jsynchronous-client.js', {'root': '../../'});
+  res.sendFile('/node_modules/jsynchronous/jsynchronous-client.js', {'root': __dirname});
 });
 
 app.get('/primus/primus.js', (req, res) => {

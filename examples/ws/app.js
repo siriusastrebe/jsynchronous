@@ -1,6 +1,6 @@
 const express = require('express');
 const WebSocket = require('ws');
-const jsynchronous = require('../../jsynchronous.js');
+const jsynchronous = require('jsynchronous');
 
 const wss = new WebSocket.Server({ port: 8080 });
 
@@ -43,5 +43,5 @@ app.get('/', (req, res) => {
 })
 
 app.get('/jsynchronous-client.js', (req, res) => {
-  res.sendFile('/jsynchronous-client.js', {'root': '../../'});
+  res.sendFile('/node_modules/jsynchronous/jsynchronous-client.js', {'root': __dirname});
 })

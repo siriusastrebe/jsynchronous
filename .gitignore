@@ -1,2 +1,3 @@
 node_modules
 /tests/selenium/webdrivers
+package-lock.json

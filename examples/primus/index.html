@@ -5,6 +5,8 @@
   const primus = Primus('ws://localhost:8080', {protocol: 'ws:', port: 8080});
   const $ynced = jsynchronous('object');
 
+  jsynchronous.send = (data) => { primus.write(data) }
+
   primus.on('data', function message(data) {
     jsynchronous.onmessage(data);
     console.log($ynced);
