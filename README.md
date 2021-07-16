@@ -451,4 +451,4 @@ There are limits to using a reactive data structure like jsynchronous to manage 
 
 Want to help out? Consider [donating](https://github.com/sponsors/siriusastrebe), all proceeds go towards development of jsynchronous. 
 
-[Reach out](http://www.asksiri.us/) if you would like to contribute code to this open source project.
+[Reach out](mailto:siriusastrebe@gmail.com) if you would like to contribute code to this open source project.
