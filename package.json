@@ -1,0 +1,32 @@
+{
+  "name": "jsynchronous",
+  "version": "0.9.0",
+  "author": "Sirius Strebe <siriusastrebe@gmail.com> (http://asksiri.us)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/siriusastrebe/jsynchronous.git"
+  },
+  "scripts": {
+    "test": "node ./tests/selenium/test.js"
+  },
+  "keywords": [
+    "nodejs",
+    "javascript",
+    "data",
+    "games",
+    "synchronization",
+    "websockets",
+    "realtime"
+  ],
+  "license": "BSD-2-Clause",
+  "description": "Get your (rapidly changing) data from Node.js->Browser with ease.",
+  "bugs": {
+    "url": "https://github.com/siriusastrebe/jsynchronous/issues"
+  },
+  "homepage": "https://github.com/siriusastrebe/jsynchronous#readme",
+  "main": "jsynchronous.js",
+  "directories": {
+    "example": "examples",
+    "test": "tests"
+  }
+}
