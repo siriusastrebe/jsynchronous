@@ -383,7 +383,7 @@ class JSynchronous {
     this.cachedDescription = undefined;
 
     if (!enumerable(initial)) {
-      throw `Cannot synchronize variables of type ${detailedType(initial)}. Try placing it in an object, or an array and then calling jsynchronous().`;
+      throw `Cannot synchronize variables of type ${detailedType(initial)}. Try placing it in an object or an array then call jsynchronous().`;
     }
 
     if (initial[jsynchronous.reserved_property]) {
@@ -576,6 +576,9 @@ class JSynchronous {
         this.handshake(websocket, listener, rootHash);
       } else if (op === 'resync') {
         this.resync(websocket, listener, json);
+      } else if (op === 'initial') {
+        listener.penalty += 5; // Penalize clients heavily for initial request
+        this.sendInitial(websocket);
       }
     } catch (e) {
       listener.penalty += 5;  // Penalize clients heavily if they trigger errors
@@ -776,44 +779,45 @@ jsynchronous.onmessage = (websocket, data) => {
     return;
   }
 
-  if (json) {
-    let op = getOp(json[0]);
-    let name = json[1];
-    let jsync = syncedNames[name];
-
-    if (!op) {
-      console.error(`Jsynchronous client->server message contains an unrecognized op: ${op}`);
-      return;
-    }
-    if (!jsync) {
-      console.error(`Jsynchronous client->server message references non-existent variable name ${name}`);
-      return;
-    }
-    if (!jsync.listeners.has(websocket)) {
-      console.error(`Jsynchronous client is attempting ${op} isn't registered with $ync() on the variable '${name};`);
-      return;
-    }
-
-    // Denial of Service Protection. Limit to 10 messages at a time, decaying by 1 per second
-    let listener = jsync.listeners.get(websocket);
-    listener.penalty = 1 + Math.max(0, listener.penalty - Math.floor((new Date() - listener.lastMessage) / 1000));
-    listener.lastMessage = new Date();
-
-    if (listener.penalty > 10) {
-      listener.penalty += 2;
-      if (jsync.dos === undefined || new Date() - jsync.dos > 60000) {
-        jsync.dos = new Date();
-        setTimeout(() => {
-          console.error(`Jsynchronous Denial of Service detected, dropping client requests. Penalty: ${listener.penalty} seconds`);
-        }, 1000);
-      }
-      return;
-    }
-
-    jsync.on_message(op, websocket, listener, json);
-  } else {
+  if (!json) {
     console.error(`Jsynchronous client->server onmessage got a malformed piece of json`);
+    return;
+  } 
+
+  let op = getOp(json[0]);
+  let name = json[1];
+  let jsync = syncedNames[name];
+
+  if (!op) {
+    console.error(`Jsynchronous client->server message contains an unrecognized op: ${op} ${json[0]}`);
+    return;
   }
+  if (!jsync) {
+    console.error(`Jsynchronous client->server message references non-existent variable name ${name}`);
+    return;
+  }
+  if (!jsync.listeners.has(websocket)) {
+    console.error(`Jsynchronous client is attempting ${op} isn't registered with $ync() on the variable '${name};`);
+    return;
+  }
+
+  // Denial of Service Protection. Limit to 12 messages at a time, decaying by 1 per second
+  let listener = jsync.listeners.get(websocket);
+  listener.penalty = 1 + Math.max(0, listener.penalty - Math.floor((new Date() - listener.lastMessage) / 1000));
+  listener.lastMessage = new Date();
+
+  if (listener.penalty > 12) {
+    listener.penalty += 2;
+    if (jsync.dos === undefined || new Date() - jsync.dos > 60000) {
+      jsync.dos = new Date();
+      setTimeout(() => {
+        console.error(`Jsynchronous Denial of Service detected, dropping client requests. Penalty: ${listener.penalty} seconds`);
+      }, 1000);
+    }
+    return;
+  }
+
+  jsync.on_message(op, websocket, listener, json);
 }
 
 jsynchronous.list = () => {

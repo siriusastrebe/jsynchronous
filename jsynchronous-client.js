@@ -36,6 +36,7 @@ function jsynchronousSetup() {
 
   var jsyncs = {}
   var standIns = {}
+  var backoffs = {}
 
   function onmessage(data) {
     var json = JSON.parse(data);
@@ -54,11 +55,19 @@ function jsynchronousSetup() {
       var maxCounter = json[3];
       var changes = json[4];
       var jsync = jsyncs[name];
-      if (jsync === undefined) {
-        // TODO: Request initial? In the off chance we have somehow missed that packet
-        throw "JSynchronous server changes for unknown variable with name '" + name + "'";
+
+      if (jsync) {
+        processChanges(minCounter, maxCounter, changes, jsync);
+      } else {
+        if (jsynchronous.send) {
+          var uniqueId = 'initial' + name;
+          communicateWithBackoff(uniqueId, ['initial', name], function () {
+            return jsyncs[name] === undefined;
+          });
+        } else {
+          throw "JSynchronous server changes for unknown variable with name '" + name + "'";
+        }
       }
-      processChanges(minCounter, maxCounter, changes, jsync);
     } else if (op === 'handshake') {
       var secret = json[2];
       var jsync = jsyncs[name];
@@ -119,10 +128,7 @@ function jsynchronousSetup() {
         references: []
       },
       storedChanges: [],
-      resyncing: false,
-      resyncs: [],
-      backoff: 0,
-      backoffs: 1,
+      resyncs: []
     }
 
     if (settings.rewound === true) {
@@ -365,6 +371,7 @@ function jsynchronousSetup() {
     resolveReferences(jsync);
 
     cleanStorage(jsync);
+
     var stored = jsync.storedChanges[0];
     if (stored && stored.min === jsync.counter) {
       jsync.storedChanges.shift();
@@ -491,19 +498,15 @@ function jsynchronousSetup() {
       throw "Jsynchronous is out of sync, cannot resync without a successful handshake";
     }
 
-    if (jsync.secret
-        && (jsync.resyncs.length === 0
-         || new Date().getTime() > jsync.backoff
-         || jsync.storedChanges.length === 0)) {
+    if (jsync.secret) {
       console.warn("Jsynchronous client is out of sync. On counter " + jsync.counter + " got " + minCounter + ". Initiaing resync");
 
-      var defaultTimeout = 4000;
-      jsync.backoff = new Date().getTime() + defaultTimeout * jsync.backoffs;
-      jsync.backoffs = jsync.backoffs * 2;
-
       // TODO: Request only missing ranges
-      var payload = [OP_ENCODINGS.indexOf('resync'), jsync.name, jsync.secret, jsync.counter, minCounter];
-      jsynchronous.send(JSON.stringify(payload));
+      var uniqueId = 'resync' + jsync.name;
+      var payload = ['resync', jsync.name, jsync.secret, jsync.counter, minCounter];
+      communicateWithBackoff(uniqueId, payload, function () {
+        return jsync.counter < maxCounter;
+      });
       jsync.resyncs.push({t: new Date().getTime(), min: minCounter, max: jsync.counter});
     }
   
@@ -529,7 +532,7 @@ function jsynchronousSetup() {
       jsync.storedChanges.splice(0, splices);
     }
 
-    jsync.backoffs = 1;
+    delete backoffs['resync' + jsync.name];
   }
 
   // ----------------------------------------------------------------
@@ -769,26 +772,43 @@ function jsynchronousSetup() {
     jsynchronous.send(JSON.stringify(payload));
   }
 
+  function communicateWithBackoff(uniqueId, args, resendFunc, timeout) {
+    var defaultTimeout = 1000;
+    timeout = timeout || defaultTimeout;
+
+    if (jsynchronous.send !== undefined) {
+      if (backoffs[uniqueId] === undefined || backoffs[uniqueId] <= new Date().getTime()) {
+        backoffs[uniqueId] = new Date().getTime() + timeout - 20;
+        communicate(args[0], args[1], args[2], args[3], args[4]);
+        setTimeout(() => {
+          if (resendFunc()) {
+            communicateWithBackoff(uniqueId, args, resendFunc, timeout * 2);
+          }
+        }, timeout);
+      }
+    }
+  }
+
   function handshake(jsync, rootHash, timeout) {
     if (jsynchronous.send === undefined) {
       console.warn("Jsynchronous client hasn't been provided a jsynchronous.send = (data) => {}  function. This jsynchronous client will not be able to re-synchronize in the event of a TCP/IP connection interrupt.");
-    } else {
-      communicate('handshake', jsync.name, rootHash);
-
-      var defaultTimeout = 2000;
-      if (timeout === undefined) {
-        timeout = defaultTimeout;
-      }
-      setTimeout(() => {
-        if (jsync.secret === undefined) {
-          handshake(jsync, rootHash, timeout * 3);  // Keep trying to handshake, but really backoff
-
-          if (timeout >= 30000 && timeout < 30000 * 3) {
-            console.warn("Jsynchronous client->server handshake left hanging for over a minute. This usually means haven't set up the server to call jsynchronous.onmessage(websocket, data). Resynchronization is impossible without a successful handshake. Use the option {one_way: true} on the server side call to jsynchronous() to disable this warning.");
-          }
-        }
-      }, timeout);
+      return
     }
+
+    if (jsync.one_way === true) {
+      return;
+    }
+
+    var uniqueId = 'handshake-' + jsync.name;
+    communicateWithBackoff(uniqueId, ['handshake', jsync.name, rootHash], function () {
+      return jsync.secret === undefined;
+    });
+
+    setTimeout(() => {
+      if (jsync.secret === undefined) {
+        console.warn("Jsynchronous client->server handshake left hanging for over 20 seconds. This usually means haven't set up the server to call jsynchronous.onmessage(websocket, data). Resynchronization is impossible without a successful handshake. Use the option {one_way: true} on the server side call to jsynchronous() to disable this warning.");
+      }
+    }, 20000);
   }
 
 

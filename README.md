@@ -2,7 +2,7 @@
 
 Get your (rapidly changing) data from Node.js->Browser with ease. 
 
-Jsynchronous is a real-time data synchronization library. Fast enough for games, flexible enough for science, tested to precision. Can also handle server->server sync or browser->server sync. 
+Jsynchronous is a real-time data synchronization library. Fast enough for games, flexible enough for science, and tested to precision. Can also handle server->server sync or browser->server sync. 
 
 Create an array or object in Node.js. Jsynchronous will create an identical variable in connected browsers:
 
@@ -60,7 +60,7 @@ The server side setup consists of 3 required steps:
 
 ```javascript
 // Server side using socket.io
-const { Server } = require("socket.io"); 
+const { Server } = require('socket.io'); 
 const jsynchronous = require('jsynchronous');
 
 jsynchronous.send = (socket, data) => socket.emit('msg', data);
@@ -146,17 +146,17 @@ You can see a list of names using jsynchronous.list();
 
 # Connection interrupts and Resynchronization
 
-There's many reasons why a TCP/IP connection would reset. Losing service, going underground or in an elevator with your phone can cause timeouts, closing your laptop, switching between ethernet wifi or cellular data resets your connections. Sometimes the wifi or the network itself has a hiccup. Many websocket libraries will resume a session after a TCP/IP interrupt, but don't guarantee delivery of messages sent while the tcp/ip connection is down. 
+There's many reasons why a TCP/IP connection would reset. Losing service, closing your laptop or your computer falling asleep, going underground or in an elevator with your phone, switching between ethernet, wifi, or cellular data. Sometimes the router or the network itself has a hiccup. Many websocket libraries will resume a session after a TCP/IP interrupt but don't guarantee delivery of messages sent while the tcp/ip connection is down. 
 
-Jsynchronous will ensure synchronization occurs when the user reconnects - no matter how long ago they disconnected. It achieves this by numbering all messages and re-requesting missing ranges – something TCP/IP normally handles... when it isn’t interrupted.
+Jsynchronous will ensure resynchronization occurs when the user reconnects no matter how long ago they disconnected. It achieves this by numbering all messages and re-requesting missing ranges – something TCP/IP normally handles... when it isn’t interrupted.
 
-In order to support resynchronization requests, client->server communication is required. You will have to define a client side jsynchronous.send function and make calls to the server side jsynchronous.onmessage(websocket, data). Similar to the earlier set up, but note how server side functions need a websocket passed in.
+In order to support resynchronization requests, client->server communication is required. You will have to add jsynchronous.send to the client side, and call jsynchronous.onmessage(websocket, data) on the server to receive the sent data. Similar to the earlier set up but with a .send and a .onmessage on both client and server. Also note how server side functions need a websocket passed in.
 
 ```javascript
 // Server side
-const $ynchronized = jsynchronous(['Quoth', 'the', 'raven', '"Nevermore."']);
-
 jsynchronous.send = (socket, data) => socket.emit('msg', data));
+
+const $ynchronized = jsynchronous(['Quoth', 'the', 'raven', '"Nevermore."']);
 
 io.on('connection', (socket) => {
   $ynchronized.$ync(socket);
