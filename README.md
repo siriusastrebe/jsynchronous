@@ -302,6 +302,17 @@ jsynchronous.variables();
 
 Returns an object with key->value corresponding to name->synchronized variable.
 
+### Garbage Collection
+```
+jsynchronous.pausegc(); // Pauses jsynchronous garbage collection
+```
+```
+jsynchronous.resumegc(); // Resumes paused garbage collection
+```
+```
+jsynchronous.rungc(); // Runs the garbage collector synchronously, ignores pause
+```
+
 ## The Jsynchronous() function call
 
 ```javascript
