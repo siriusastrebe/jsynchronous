@@ -314,10 +314,12 @@ class JSynchronous {
     this.rewindInitial = undefined;
     this.gc = {
       count: 0,
+      collected: 0,
       timeout: undefined,
       maxTimeout: 60000,
       scheduled: null,
       stopwatch: null,
+      triggers: 0,
       buffer: 0
     };
 
@@ -394,7 +396,9 @@ class JSynchronous {
       history_limit: this.history_limit,
       history_length: this.history.length,
       reserved_words: Object.keys(this.reserved),
-      listeners: [ ...this.listeners.keys() ]
+      listeners: [ ...this.listeners.keys() ],
+      garbageSweeps: this.gc.count,
+      garbageCollected: this.gc.collected,
     }
   }
   communicate(change) {
@@ -590,9 +594,12 @@ class JSynchronous {
   }
   scheduleGarbageCollect() {
     // The gc should run some time after a property referencing a synced object is deleted or altered
-    this.gc.count++;
 
-    if (this.gc.count >= 1000000) {
+    if (jsynchronous.gcpaused === true) { return }
+
+    this.gc.triggers++;
+
+    if (this.gc.triggers >= 1000000) {
       this.collectGarbage();  // Force Synchronous gc every 1,000,000 changes
     } else {
       this.garbageCollectWhenIdle();
@@ -600,7 +607,7 @@ class JSynchronous {
   }
   garbageCollectWhenIdle() {
     // Garbage collect on average every 20,000ms or 20,000 changes
-    let minTimeout = Math.max(0, 20000 - this.gc.count);
+    let minTimeout = Math.max(0, 20000 - this.gc.triggers);
     if (this.gc.timeout === undefined) {
       const now = new Date().getTime();
       this.gc.scheduled = now;
@@ -608,9 +615,8 @@ class JSynchronous {
       this.gc.buffer = 0;
       this.gc.target = minTimeout;
       this.gc.timeout = setTimeout(() => this.testTimeout(), minTimeout);
-console.log('setting gc timeout', minTimeout);
+      // console.log('setting gc timeout', minTimeout);
     } else if (this.gc.target / 16 > minTimeout) {
-console.log('Resetting timeout', minTimeout);
       // Reset the timer for the next gc if the calculated minTimeout is 
       if (minTimeout < 16) {
         minTimeout = 0;
@@ -619,6 +625,7 @@ console.log('Resetting timeout', minTimeout);
       clearTimeout(this.gc.timeout);
       this.gc.target = minTimeout;
       this.gc.timeout = setTimeout(() => this.testTimeout(), minTimeout);
+      // console.log('Resetting timeout', minTimeout);
     }
   }
   testTimeout() {
@@ -633,10 +640,12 @@ console.log('Resetting timeout', minTimeout);
       this.gc.timeout = setTimeout(() => this.testTimeout(), 0);
     }
   }
-  collectGarbage() {
+  collectGarbage(force) {
     // Unlike language-level garbage collection, synchronized objects can still be referenced by the app
     // This means we can't use moving garbage collectors due to the app potentially re-referencing during sweeps
     // This uses naive mark-sweep
+
+    if (force !== true && jsynchronous.gcpaused === true) { return }
 
     const marked = {...this.objects}
     const reachable = recurse(this.root.proxy, true);
@@ -652,11 +661,13 @@ console.log('Resetting timeout', minTimeout);
       const syncedObject = marked[hash];
       new Deletion(this, syncedObject);
     }
-    console.log('Collecting garbage', piecesOfGarbage);
+    // console.log('Collecting garbage', piecesOfGarbage);
 
     clearTimeout(this.gc.timeout);
     this.gc.timeout = undefined;
-    this.gc.count = 0;
+    this.gc.triggers = 0;
+    this.gc.collected += piecesOfGarbage;
+    this.gc.count++;
   }
   copy(target, visited) {
     if (visited === undefined) visited = new Map();
@@ -803,6 +814,19 @@ jsynchronous.variables = () => {
     variables[name] = syncedNames[name].root.proxy;
   }
   return variables;
+}
+
+jsynchronous.pausegc = () => {
+  jsynchronous.gcpaused = true;
+}
+jsynchronous.resumegc = () => {
+  jsynchronous.gcpaused = false;
+}
+jsynchronous.rungc = () => {
+  for (let name in syncedNames) {
+    const jsync = syncedNames[name];
+    jsync.collectGarbage(true);
+  }
 }
 
 if (typeof module === 'object') {
