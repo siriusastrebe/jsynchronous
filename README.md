@@ -20,7 +20,7 @@ Changes to that variable will be automatically communicated to the browser so th
 ```javascript
 // Server side
 $ynchronized.velocity.x += 5;
-$ynchronized.velocity.x -= 9.81;
+$ynchronized.velocity.y -= 9.81;
 ```
 ```javascript
 // Browser side
@@ -50,27 +50,27 @@ const $ynced = jsynchronous(data);
 
 # Setting up
 
-Jsynchronous does not lock you into a transportation medium you use whether it be [socket.io](https://socket.io/) [ws](https://www.npmjs.com/package/ws) [Primus](https://www.npmjs.com/package/primus), [EventSource](https://developer.mozilla.org/en-US/docs/Web/API/EventSource), or [webRTC](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API). Any protocol with eventual in-order delivery works. We will be using [Socket.io](https://socket.io/) in this example.
+Jsynchronous does not lock you into a transportation medium you use whether it be [socket.io](https://socket.io/) [ws](https://www.npmjs.com/package/ws) [Primus](https://www.npmjs.com/package/primus), [EventSource](https://developer.mozilla.org/en-US/docs/Web/API/EventSource), or [webRTC](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API). Any protocol with eventual in-order delivery works. We will be using [ws](https://www.npmjs.com/package/ws) in this example.
 
-The server side setup consists of 3 required steps: 
+The server side setup consists of 3 required steps:
 
 1) Specify a jsynchronous.send function
-2) Create a synchronized variable by calling jsynchronous() 
+2) Create a synchronized variable by calling jsynchronous()
 3) Register connected websockets to your synchronized variable with .$ync(websocket)
 
 ```javascript
-// Server side using socket.io
-const { Server } = require('socket.io'); 
+// Server side using ws library
 const jsynchronous = require('jsynchronous');
+const WebSocket = require('ws');
 
-jsynchronous.send = (socket, data) => socket.emit('msg', data);
+jsynchronous.send = (websocket, data) => websocket.send(data);
 
 const $matrix = jsynchronous([[1, 2], [3, 4]]);
 
-const io = new Server(server);
-io.on('connection', (socket) => {
-  $matrix.$ync(socket);
-  socket.on('disconnect', () => $matrix.$unsync(socket));
+const wss = new WebSocket.Server({port: 8080});
+wss.on('connection', (websocket) => {
+  $matrix.$ync(websocket);
+  websocket.on('close', () => $matrix.$unsync(websocket));
 });
 ```
 
@@ -86,18 +86,16 @@ Now that the data is being sent from the server, let's focus on the client side.
 <script src="/jsynchronous-client.js"></script>
 ```
 
-or
-
 ```javascript
 import jsynchronous from 'jsynchronous/jsynchronous-client.js';
 ```
 
-The first method needs to be served as a static asset. The second method requires a bundler like webpack.
+The first method needs to be served as a static asset, or [from a CDN](https://unpkg.com/jsynchronous@*/jsynchronous-client.js). The second method requires a bundler like webpack.
 
 ```javascript
 // Browser side
-const socket = io();
-socket.on('msg', (data) => jsynchronous.onmessage(data));
+const ws = new WebSocket('ws://localhost:8080');
+ws.onmessage = (data) => jsynchronous.onmessage(data.data);
 ```
 
 That's all it takes! View the contents of your synchronized variable on the client:
@@ -109,7 +107,7 @@ console.log(jsynchronous());
 
 Take a look at sample code at the [example setups](https://github.com/siriusastrebe/jsynchronous/tree/master/examples) for guidance.
 
-There's a 4th optional step of enabling browser->server communication, used to recover from network interruptions causing desynchronization which will be discussed below.
+There's an optional step of enabling browser->server communication which helps to recover from network interruptions, which will be discussed below.
 
 # Stand-In variables
 
@@ -154,42 +152,43 @@ In order to support resynchronization requests, client->server communication is 
 
 ```javascript
 // Server side
-jsynchronous.send = (socket, data) => socket.emit('msg', data));
+jsynchronous.send = (websocket, data) => websocket.send(data);
 
 const $ynchronized = jsynchronous(['Quoth', 'the', 'raven', '"Nevermore."']);
 
-io.on('connection', (socket) => {
-  $ynchronized.$ync(socket);
-  socket.on('disconnect', () => $ynchronized.$unsync(socket));
-  socket.on('msg', (data) => jsynchronous.onmessage(socket, data));
+const wss = new WebSocket.Server({port: 8080});
+wss.on('connection', (websocket) => {
+  $ynchronized.$ync(websocket);
+  websocket.on('message', (data) => jsynchronous.onmessage(websocket, data));
+  websocket.on('close', () => $ynchronized.$unsync(websocket));
 });
 ```
 ```javascript
-// Browser side 
-const socket = io();
-socket.on('msg', (data) => jsynchronous.onmessage(data));
-jsynchronous.send = (data) => socket.emit('msg', data));
+// Browser side
+const ws = new WebSocket('ws://localhost:8080');
+ws.onmessage = (data) => jsynchronous.onmessage(data.data);
+jsynchronous.send = (data) => ws.send(data);
 
-const $ynchronized = jsynchronous('object');
+$ynced = jsynchronous('object');
 ```
 
-Setting up client->server communication makes your synchronized variables resistant to data loss and desynchronization. By default the client will give you a warning if you don't provide .send on client or .onmessage on server and will halt if messages are missed and no re-synchronization is possible. 
+Setting up client->server communication makes your synchronized variables resistant to data loss and desynchronization. By default the client will give you a warning if you don't provide .send on client or .onmessage on server and will halt if messages are missed and no re-synchronization is possible.
 
 Not all applications need this level of protection and can rely on the guarantees afforded by TCP/IP. Disable client->server communication entirely with the setting {one_way: true} as an option to your call to jsynchronous() on the server. One_way mode works great if you keep the synchronized variable’s initial structure the same and only change primitive values (strings, numbers, booleans) without assigning any new references to objects or arrays. Missing messages will be ignored and jsynchronous will do its best to continue to update properties of already synchronized objects/arrays.
 
 # Rewind mode
 
-Rewind mode is a powerful feature of jsynchronous. Rewind mode lets you 'rewind' to previous snapshots of the data. 
+Rewind mode is a powerful feature of jsynchronous. Rewind mode lets you 'rewind' to previous snapshots of the data.
 
 Imagine a chess game. In normal mode it's impossible to step back a few moves to see how the board looked in the past. With rewind mode you can see the board as it looked for any move in the game. Pausing, rewinding, and playing changes forward all become possible using rewind mode.
 
-Normally clients discard the history of changes once they're up to date to save on memory. With rewind mode, clients are given the full history from the very beginning. The history can be applied to the initial state to reconstruct any moment along that history. This is called Event Sourcing. 
+Normally clients discard the history of changes once they're up to date to save on memory. With rewind mode, clients are given the full history from the very beginning. The history can be applied to the initial state to reconstruct any moment along that history. This is called Event Sourcing.
 
 Create a snapshot on the server by calling .$napshot() on the synchronized variable:
 
 ```javascript
 // Server side
-const $ynced = jsynchronous([]);
+const $ynced = jsynchronous([], 'name', {rewind: true});
 
 $ynced.push(Math.random());
 $ynced.$napshot('one');
@@ -250,8 +249,8 @@ On the flip side, you can reference a synchronized variable from other parts of 
 
 ```javascript
 const $orientation = $ynced.orientation;
-$orientation.i = 1; // Will synchronize
-$orientation.w = 0; // Will synchronize
+$orientation.i = 0; // Will synchronize
+$orientation.j = 1; // Will synchronize
 ```
 
 We recommended you use the prefix ‘$’ or some other convention when you reference a synchronized variable to indicate that assignments to that variable will be sent over the network.
@@ -264,7 +263,7 @@ We recommended you use the prefix ‘$’ or some other convention when you refe
 jsynchronous(data, name, options);
 ```
 
-Creates and returns a synchronized variable. 
+Creates and returns a synchronized variable.
 
 On the server, data must be an object or an array.
 On the client, data must be a string matching 'array' or 'object'.
@@ -281,7 +280,7 @@ jsynchronous.send = (websocket, data) => {}
 jsynchronous.send = (data) => {}
 ```
 
-Undefined by default, you must assign it to a function that transmits the data. Websocket will match a value you provided to your calls to a synchronous variable's $ync(websocket) method. 
+Undefined by default, you must assign it to a function that transmits the data. Websocket will match a value you provided to your calls to a synchronous variable's $ync(websocket) method.
 
 ### onmessage
 
@@ -293,7 +292,7 @@ jsynchronous.onmessage(websocket, data);
 jsynchronous.onmessage(data);
 ```
 
-A function. It is up to you to call onmessage whenever transmitted data has arrived. 
+A function. It is up to you to call onmessage whenever transmitted data has arrived.
 
 ### list
 
@@ -374,7 +373,7 @@ Server only. Adds a client to the list of listeners. Websocket can be a string, 
 .$unsync(websocket)
 ```
 
-Server only. Removes the websocket from the list of clients.
+Server only. Removes the websocket from the list of clients. The client won't receive any more updates.
 
 ```javascript
 .$copy()
@@ -386,13 +385,13 @@ Server and client. Returns a deep copy of the synchronized variable. The returne
 .$on('changes', callback)
 ```
 
-Client only. Creates an event listener which triggers callback after each batch of changes. Server events will be available in future releases. 
+Client only. Creates an event listener which triggers callback after each batch of changes. Server events will be available in future releases.
 
 ```javascript
 .$on('snapshot', callback)
 ```
 
-Client only. Creates an event which triggers callback when a snapshot is created. Server events will be available in future releases.
+Client only. Creates an event which triggers callback when a snapshot is created, used in rewind mode. Server events will be available in future releases.
 
 ```javascript
 .$tart()
@@ -436,7 +435,7 @@ In a world of clunky transport stacks with limited expressiveness jsynchronous a
 
 TCP/IP, which all browsers rely on, can see increased latency in packet loss heavy conditions due to [head of line blocking](https://gafferongames.com/post/client_server_connection/#background). 
 
-For 90% of games Jsynchronous on top of TCP/IP is more than ideal. For quick twitch-speed shooter or fighting game, maybe not. If your game does not need millisecond level precision jsynchronous will keep your data perfectly synchronized as fast as the wire will carry it to every client your websockets can [handle](https://blog.jayway.com/2015/04/13/600k-concurrent-websocket-connections-on-aws-using-node-js/).  
+For 90% of games Jsynchronous on top of TCP/IP is more than ideal. For quick twitch-speed shooter or fighting game, maybe not. If your game does not need millisecond level precision jsynchronous will keep your data perfectly synchronized as fast as the wire will carry it to every client your websockets can [handle](https://blog.jayway.com/2015/04/13/600k-concurrent-websocket-connections-on-aws-using-node-js/).
 
 [UDP may be coming to browsers](https://github.com/WICG/raw-sockets/blob/main/docs/explainer.md) which is very exciting for fast paced gaming. While UDP isn’t suitable for accurate data synchronization because it cannot ensure delivery or ordering, Jsynchronous' one_way mode would work great with UDP for speedy best-effort delivery.
 
@@ -444,7 +443,7 @@ For 90% of games Jsynchronous on top of TCP/IP is more than ideal. For quick twi
 
 The best method for securing your application is by building an API or using websockets to communicate browser->server.
 
-It is possible to import jsynchronous.js in the browser and jsynchronous-client.js on your server. Each browser would have to uniquely name their synchronized variable so the server can distinguish between them. 
+It is possible to import jsynchronous.js in the browser and jsynchronous-client.js on your server. Each browser would have to uniquely name their synchronized variable so the server can distinguish between them.
 
 For a video games, the game state can sync from server->browser, and the user inputs can sync from browser->server. In this way you can easily have your game loop respond to changes in user input and update the game state for all clients to see.
 
@@ -463,6 +462,6 @@ There are limits to using a reactive data structure like jsynchronous to manage 
 
 # Support Jsynchronous
 
-Want to help out? Consider [donating](https://github.com/sponsors/siriusastrebe), all proceeds go towards development of jsynchronous. 
+Want to help out? Consider [donating](https://github.com/sponsors/siriusastrebe), all proceeds go towards development of jsynchronous.
 
 [Reach out](mailto:siriusastrebe@gmail.com) if you would like to contribute code to this open source project.

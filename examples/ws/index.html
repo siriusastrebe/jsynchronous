@@ -1,23 +1,18 @@
 <html>
 <script src="/jsynchronous-client.js"></script>
 <script>
-  const ws = new WebSocket('ws://localhost:8080');
+const ws = new WebSocket('ws://localhost:8080');
+ws.onmessage = (data) => {
+  jsynchronous.onmessage(data.data);
+  document.body.innerHTML = JSON.stringify(jsynchronous());
+}
+ws.onopen = () => console.log('connected');
+ws.onclose = () => console.log('disconnected');;
 
-  $ynced = jsynchronous('object', 'physics');
+jsynchronous.send = (data) => ws.send(data);
 
-  ws.onopen = function open() {
-    console.log('connected');
-  };
+$ynced = jsynchronous('object');
 
-  ws.onclose = function close() {
-    console.log('disconnected');
-  };
-
-  ws.onmessage = function incoming(data) {
-    jsynchronous.onmessage(data.data);
-    console.log($ynced);
-    document.body.innerHTML = JSON.stringify($ynced);
-  };
 </script>
 <body>
 </body>

@@ -487,7 +487,7 @@ class JSynchronous {
     if (this.started !== true) {
       this.started = true;
       this.wait = false;
-      this.start = new Date().getTime();
+      this.startTime = new Date().getTime();
 
       for (let [websocket, listener] of this.listeners) {
         this.sendInitial(websocket);
