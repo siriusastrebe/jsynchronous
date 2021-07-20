@@ -145,7 +145,6 @@ class SyncedObject {
     this.jsync = jsync;
     this.type = detailedType(original);
     this.reference = newCollection(this.type, original);
-    this.parents = {};  // parents key->value corresponds to parentHash->[properties]
     this.proxy = new Proxy(this.reference, this.handler(this));
 
     jsync.objects[this.hash] = this;
@@ -170,10 +169,8 @@ class SyncedObject {
             syncedChild = new SyncedObject(jsync, value, visited);
           }
           this.reference[prop] = syncedChild.proxy;
-          syncedChild.linkParent(this, prop);
         } else {
           this.reference[prop] = syncedChild.proxy;
-          syncedChild.linkParent(this, prop);
         }
       }
     });
@@ -228,10 +225,8 @@ class SyncedObject {
           if (syncedValue === undefined) {
             syncedValue = new SyncedObject(syncedObject.jsync, value);
             obj[prop] = syncedValue.proxy;
-            syncedValue.linkParent(syncedObject, prop);
           } else {
             obj[prop] = syncedValue.proxy;
-            syncedValue.linkParent(syncedObject, prop);
           }
         }
 
@@ -246,7 +241,7 @@ class SyncedObject {
             throw `Jsynchronous sanity error - previously referenced variable was not being tracked.`
           }
 
-          syncedOld.unlinkParent(syncedObject, prop);
+          syncedObject.jsync.scheduleGarbageCollect();
         }
 
         return true;
@@ -265,46 +260,12 @@ class SyncedObject {
             throw `Jsynchronous sanity error - previously referenced variable was not being tracked.`
           }
 
-          deadManWalking.unlinkParent(syncedObject, prop);
+          syncedObject.jsync.scheduleGarbageCollect();
         }
 
         delete obj[prop];
         return true  // Indicate Success
       }
-    }
-  }
-  linkParent(syncedParent, prop) {
-    const parentHash = syncedParent.hash;
-
-    if (this.parents[parentHash] === undefined) {
-      this.parents[parentHash] = [prop];
-    } else if (this.parents[parentHash].indexOf(prop) === -1) {
-      this.parents[parentHash].push(prop);
-    }
-  }
-  unlinkParent(syncedParent, prop) {
-    const parentHash = syncedParent.hash;
-
-    const properties = this.parents[parentHash];
-    if (properties) {
-      const index = properties.indexOf(prop);
-      if (index !== -1) {
-        properties.splice(index, 1);
-      } else {
-        throw `Unlinking a jsynchronous variable from its parent, this.parent's properties is missing the unlinked prop.`;
-      }
-
-      if (properties.length === 0) {
-        delete this.parents[parentHash];
-      }
-
-      if (Object.keys(this.parents).length === 0) {
-        // Prep for garbage collection
-        new Deletion(this.jsync, this);
-        this.deleted = true;
-      }
-    } else {
-      throw `Unlinking a jsynchronous variable from its parent, this.parents is missing unlinked parent's properties.`;
     }
   }
   describe() {
@@ -350,6 +311,14 @@ class JSynchronous {
     this.history = [];
     this.snapshots = {};
     this.rewindInitial = undefined;
+    this.gc = {
+      count: 0,
+      timeout: undefined,
+      maxTimeout: 60000,
+      scheduled: null,
+      stopwatch: null,
+      buffer: 0
+    };
 
     // These variables are special method names on the root of a synchronized variable. They will throw an error if you reassign these methods, so you can rename these methods by passing them into the options.
     this.defaults = {
@@ -618,71 +587,61 @@ class JSynchronous {
       jsynchronous.send(websocket, JSON.stringify(payload));
     }
   }
-  sanityCheck() {
-    // Sanity Check is used during testing to ensure the internal consistency of the jsynchronous data structure.
-    // Visit each node. Make sure this.objects contains all visited nodes, and no other nodes.
-    // Make sure that each parent for each node is tracked accurately, and that the node has no other parents
+  scheduleGarbageCollect() {
+    // The gc should run some time after a property referencing a synced object is deleted or altered
+    this.gc.count++;
 
-    const nodes = recurse(this.root.proxy, true);
-    const hashes = Object.keys(this.objects);
-    nodes.forEach((n) => {
-      const syncedObject = n[jsynchronous.reserved_property];
-      const index = hashes.indexOf(syncedObject.hash);
-      if (index > -1) {
-        hashes.splice(index, 1);
-      } else {
-        throw `Jsynchronous Sanity check error - Object ${syncedObject.hash} reachable from the root isn't registered in jsync.objects`;
-      }
+    if (this.gc.count >= 100000) {
+      this.collectGarbage();  // Force Synchronous gc every 100,000 changes
+    } else {
+      this.garbageCollectWhenIdle();
+    }
+  }
+  garbageCollectWhenIdle() {
+    if (this.gc.timeout === undefined) {
+      const now = new Date().getTime();
+      this.gc.scheduled = now;
+      this.gc.stopwatch = now;
+      this.gc.buffer = 0;
+      this.gc.timeout = setTimeout(() => this.testTimeout(), 0);
+    }
+  }
+  testTimeout() {
+    const now = new Date().getTime();
+    if (now > this.gc.scheduled + this.gc.maxTimeout) {
+      this.collectGarbage();
+    } else if (now < this.gc.stopwatch + this.gc.buffer) {
+      this.collectGarbage();
+    } else {
+      this.gc.stopwatch = new Date().getTime();
+      this.gc.buffer = this.gc.buffer + 1;
+      this.gc.timeout = setTimeout(() => this.testTimeout(), 0);
+    }
+  }
+  collectGarbage() {
+    // Unlike language-level garbage collection, synchronized objects can still be referenced by the app
+    // This means we can't use moving garbage collectors due to the app potentially re-referencing during sweeps
+    // This uses naive mark-sweep
+
+    const marked = {...this.objects}
+    const reachable = recurse(this.root.proxy, true);
+    reachable.forEach((v) => {
+      const syncedObject = v[jsynchronous.reserved_property];
+      delete marked[syncedObject.hash];
     });
 
-    if (hashes.length > 0) {
-      throw `Jsynchronous Sanity check error - ${hashes.length} objects referenced in jsync.objects isn't reachable from the root`;
+    let piecesOfGarbage = 0;
+    for (let hash in marked) {
+      piecesOfGarbage++;
+      const syncedObject = marked[hash];
+      delete this.objects[syncedObject.hash]; // Toss out the trash
+      syncedObject.deleted = true;
     }
+    console.log('Collecting garbage', piecesOfGarbage);
 
-    const referencedBy = {} // Key->value corresponds to hash->[hashes of all parents]
-
-    nodes.forEach((n) => {
-      const syncedObject = n[jsynchronous.reserved_property];
-      for (let hash in n.parents) {
-        const properties = n.parents[hash];
-        const parent = this.objects[hash];
-        properties.forEach((p) => {
-          if (parent.variable[p] !== syncedObject.variable) {
-            throw `Jsynchronous Sanity check error - Internal parent data of ${syncedObject.hash} doesn't match parent ${parent.hash} properties`;
-          }
-        });
-      }
-
-      for (let prop in n.variable) {
-        const child = n.variable[prop];
-        if (enumerable(child)) {
-          const childHash = child[jsynchronous.reserved_property].hash;
-          if (referencedBy[childHash] === undefined) { referencedBy[childHash] = [n.hash]; }
-          else { referencedBy[childHash].push(n.hash); }
-
-          if (child.parents[n.hash] === undefined) {
-            throw `Jsynchronous Sanity check error - Child of ${n.hash} at property ${prop} isn't tracking it as a parent`
-          }
-
-          if (child.parents[n.hash].indexOf(prop) === -1) {
-            throw `Jsynchronous Sanity check error - Child of ${n.hash} is missing a reference at ${prop}`
-          }
-        }
-      }
-    });
-
-    for (let hash in referencedBy) {
-      const n = this.objects[hash];
-      const parentHashes = referencedBy[hash];
-      parentHashes.forEach((hash) => {
-        if (n.parents[hash] === undefined) {
-          // This should already have been covered by a check several lines above this
-          throw `Jsynchronous Sanity check error - ${n.hash} is referenced by a parent ${hash} that it isn't tracking.`;
-        } else if (n.parents[hash].length !== parentHashes.filter((h) => h === hash).length) {
-          throw `Jsynchronous Sanity check error - ${n.hash}'s record of its parent ${hash} has an inaccurate number of properties`;
-        }
-      });
-    }
+    clearTimeout(this.gc.timeout);
+    this.gc.timeout = undefined;
+    this.gc.count = 0;
   }
   copy(target, visited) {
     if (visited === undefined) visited = new Map();
@@ -801,12 +760,12 @@ jsynchronous.onmessage = (websocket, data) => {
     return;
   }
 
-  // Denial of Service Protection. Limit to 12 messages at a time, decaying by 1 per second
+  // Denial of Service Protection. Limit to 13 messages at a time, decaying by 1 per second
   let listener = jsync.listeners.get(websocket);
   listener.penalty = 1 + Math.max(0, listener.penalty - Math.floor((new Date() - listener.lastMessage) / 1000));
   listener.lastMessage = new Date();
 
-  if (listener.penalty > 12) {
+  if (listener.penalty > 13) {
     listener.penalty += 2;
     if (jsync.dos === undefined || new Date() - jsync.dos > 60000) {
       jsync.dos = new Date();
@@ -955,7 +914,7 @@ function enumerable(obj) {
 }
 
 function enumerate(obj, func) {
-  // Calls func(value, prop) on each property in the object
+  // Calls func(value, prop) on each object/array property in the object
   const type = detailedType(obj);
 
   if (type === 'object' || type === 'array') {

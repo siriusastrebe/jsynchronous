@@ -414,7 +414,7 @@ Have an event listener .$on('change') to update the state.
 
 ## Can jsynchronous be used to represent graphs or complex data structures?
 
-Absolutely, Yes. Graphs sparse or dense, trees, linked lists, doubly linked lists, circular and self referential data structures. Neural networks potentially? If JavaScript can represent it, jsynchronous can synchronize it with ease.
+Absolutely, Yes. Graphs sparse or dense, trees, linked lists, doubly linked lists, circular and self referential data structures. Neural networks potentially? If JavaScript can represent it jsynchronous can synchronize it with ease.
 
 In a world of clunky transport stacks with limited expressiveness jsynchronous aims to be a breath of fresh air without limits to what you can use it for.
 
@@ -422,9 +422,9 @@ In a world of clunky transport stacks with limited expressiveness jsynchronous a
 
 TCP/IP, which all browsers rely on, can see increased latency in packet loss heavy conditions due to [head of line blocking](https://gafferongames.com/post/client_server_connection/#background). 
 
-If your game does not need millisecond level precision jsynchronous will keep your data perfectly synchronized as fast as the wire will carry it to every client your websockets can [handle](https://blog.jayway.com/2015/04/13/600k-concurrent-websocket-connections-on-aws-using-node-js/). For 90% of games Jsynchronous on top of TCP/IP is more than ideal. For quick twitch-speed shooter or fighting game, maybe not. 
+For 90% of games Jsynchronous on top of TCP/IP is more than ideal. For quick twitch-speed shooter or fighting game, maybe not. If your game does not need millisecond level precision jsynchronous will keep your data perfectly synchronized as fast as the wire will carry it to every client your websockets can [handle](https://blog.jayway.com/2015/04/13/600k-concurrent-websocket-connections-on-aws-using-node-js/).  
 
-[UDP may be coming to browsers](https://github.com/WICG/raw-sockets/blob/main/docs/explainer.md) which is very exciting for fast paced gaming. While UDP isn’t suitable for accurate data synchronization because it cannot ensure delivery or ordering, Jsynchronous' one_way mode could be used on top of UDP for fast best-effort delivery.
+[UDP may be coming to browsers](https://github.com/WICG/raw-sockets/blob/main/docs/explainer.md) which is very exciting for fast paced gaming. While UDP isn’t suitable for accurate data synchronization because it cannot ensure delivery or ordering, Jsynchronous' one_way mode would work great with UDP for speedy best-effort delivery.
 
 ## Can I do Browser->Server sync?
 

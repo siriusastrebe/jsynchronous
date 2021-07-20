@@ -63,7 +63,7 @@ function jsynchronousSetup() {
           var uniqueId = 'initial' + name;
           communicateWithBackoff(uniqueId, ['initial', name], function () {
             return jsyncs[name] === undefined;
-          });
+          }, 2000);
         } else {
           throw "JSynchronous server changes for unknown variable with name '" + name + "'";
         }

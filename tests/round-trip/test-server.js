@@ -8,7 +8,7 @@ jsynchronous.send = (websocket, data) => {
   websocket.send(data);
 }
 
-const $erved = jsynchronous({}, '', {one_way: true});
+const $erved = jsynchronous({}, '', {one_way: true, history_limit: 1});
 const $relay = jsynclient('object');
 const $rewinder = jsynchronous({initial: 'data', eight: [8, 8, 8], '∞': {'∞': '∞'}}, 'rewinder', {rewind: true});
 
@@ -410,7 +410,10 @@ async function startTest() {
   await test();
 
   const used = process.memoryUsage().heapUsed / 1024 / 1024;
-  console.log(`All tests passed! Memory used: ${Math.round(used * 100) / 100} MB`);
+  console.log(`All tests passed!`);
+  setTimeout(() => { 
+    console.log(`Counter: ${$erved.$info().counter}, Memory used: ${Math.round(used * 100) / 100} MB`);
+  }, 4000);
 }
 
 

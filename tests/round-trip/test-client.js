@@ -10,7 +10,7 @@ jsynchronous.send = (websocket, data) => {
 }
 
 const $erved = jsynclient('object');
-const $relay = jsynchronous({}, '', {one_way: true});
+const $relay = jsynchronous({}, '', {one_way: true, history_limit: 2});
 
 const $rewinder = jsynclient('object', 'rewinder');
 const $rewound = jsynchronous({}, 'rewound', {rewind: true});
@@ -20,7 +20,10 @@ $erved.$on('changes', () => {
   onChanges($erved, $relay)
   if ($erved.test === 'passed') {
     const used = process.memoryUsage().heapUsed / 1024 / 1024;
-    console.log(`All tests passed! Memory used: ${Math.round(used * 100) / 100} MB`);
+    console.log(`All tests passed! `);
+    setTimeout(() => { 
+      console.log(`Counter: ${$relay.$info().counter}, Memory used: ${Math.round(used * 100) / 100} MB`);
+    }, 4000);
   }
 });
 $rewinder.$on('changes', () => onChanges($rewinder, $rewound));
@@ -33,8 +36,8 @@ async function connectClient(backoff) {
     console.log('server->Relay communcation established');
   });
   ws.on('message', function incoming(data) {
-    console.log(data);
-    console.log('');
+    //console.log(data);
+    //console.log('');
     jsynclient.onmessage(data);
   });
   ws.on('error', async function error(a, b, c) {
