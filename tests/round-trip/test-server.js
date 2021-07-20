@@ -409,9 +409,14 @@ async function startTest() {
   console.log(`Test ${level} - One last check`);
   await test();
 
-  const used = process.memoryUsage().heapUsed / 1024 / 1024;
+  let used = process.memoryUsage().heapUsed / 1024 / 1024;
+  console.log(util.inspect($erved.$info(), {depth: 0, colors: true}));
   console.log(`All tests passed!`);
+  console.log(`Counter: ${$erved.$info().counter}, Memory used: ${Math.round(used * 100) / 100} MB`);
   setTimeout(() => { 
+    used = process.memoryUsage().heapUsed / 1024 / 1024;
+    console.log(util.inspect($erved.$info(), {depth: 0, colors: true}));
+    console.log(`All tests passed!`);
     console.log(`Counter: ${$erved.$info().counter}, Memory used: ${Math.round(used * 100) / 100} MB`);
   }, 60000);
 }

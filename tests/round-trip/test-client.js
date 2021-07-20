@@ -19,9 +19,14 @@ const $rewound = jsynchronous({}, 'rewound', {rewind: true});
 $erved.$on('changes', () => { 
   onChanges($erved, $relay)
   if ($erved.test === 'passed') {
-    const used = process.memoryUsage().heapUsed / 1024 / 1024;
+    let  used = process.memoryUsage().heapUsed / 1024 / 1024;
+    console.log(util.inspect($relay.$info(), {depth: 0, colors: true}));
     console.log(`All tests passed!`);
+    console.log(`Counter: ${$relay.$info().counter}, Memory used: ${Math.round(used * 100) / 100} MB`);
     setTimeout(() => { 
+      used = process.memoryUsage().heapUsed / 1024 / 1024;
+      console.log(util.inspect($relay.$info(), {depth: 0, colors: true}));
+      console.log(`All tests passed!`);
       console.log(`Counter: ${$relay.$info().counter}, Memory used: ${Math.round(used * 100) / 100} MB`);
     }, 60000);
   }
@@ -36,8 +41,8 @@ async function connectClient(backoff) {
     console.log('server->Relay communcation established');
   });
   ws.on('message', function incoming(data) {
-    //console.log(data);
-    //console.log('');
+    console.log(data);
+    console.log('');
     jsynclient.onmessage(data);
   });
   ws.on('error', async function error(a, b, c) {

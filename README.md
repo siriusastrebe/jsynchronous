@@ -258,6 +258,17 @@ We recommended you use the prefix ‘$’ or some other convention when you refe
 
 # Documentation Reference
 
+## Jsynchronous() function call
+
+```javascript
+jsynchronous(data, name, options);
+```
+
+Creates and returns a synchronized variable. 
+
+On the server, data must be an object or an array.
+On the client, data must be a string matching 'array' or 'object'.
+
 ## Jsynchronous methods
 
 ### send
@@ -312,14 +323,6 @@ jsynchronous.resumegc(); // Resumes paused garbage collection
 ```
 jsynchronous.rungc(); // Runs the garbage collector synchronously, ignores pause
 ```
-
-## The Jsynchronous() function call
-
-```javascript
-jsynchronous(data, name, options);
-```
-
-Creates and returns a synchronized variable. On the client, data must exactly match one of 'array', 'object', [], or {}.
 
 ## Options passed to jsynchronous(data, name, options)
 
