@@ -413,7 +413,7 @@ async function startTest() {
   console.log(`All tests passed!`);
   setTimeout(() => { 
     console.log(`Counter: ${$erved.$info().counter}, Memory used: ${Math.round(used * 100) / 100} MB`);
-  }, 4000);
+  }, 60000);
 }
 
 

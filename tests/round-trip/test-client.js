@@ -20,10 +20,10 @@ $erved.$on('changes', () => {
   onChanges($erved, $relay)
   if ($erved.test === 'passed') {
     const used = process.memoryUsage().heapUsed / 1024 / 1024;
-    console.log(`All tests passed! `);
+    console.log(`All tests passed!`);
     setTimeout(() => { 
       console.log(`Counter: ${$relay.$info().counter}, Memory used: ${Math.round(used * 100) / 100} MB`);
-    }, 4000);
+    }, 60000);
   }
 });
 $rewinder.$on('changes', () => onChanges($rewinder, $rewound));

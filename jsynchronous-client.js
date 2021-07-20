@@ -62,6 +62,7 @@ function jsynchronousSetup() {
         if (jsynchronous.send) {
           var uniqueId = 'initial' + name;
           communicateWithBackoff(uniqueId, ['initial', name], function () {
+console.log('Unknown jsynchronous variable, requesting initial' + name);
             return jsyncs[name] === undefined;
           }, 2000);
         } else {
@@ -299,7 +300,8 @@ function jsynchronousSetup() {
 
   function processChanges(minCounter, maxCounter, changes, jsync) {
     if (minCounter < jsync.counter) {
-      throw "Jsynchronous duplicate receipt of changes, expected " + jsync.counter + ", got " + jsync.minCounter;
+      console.error("Jsynchronous duplicate receipt of changes, expected " + jsync.counter + ", got " + minCounter);
+      // throw "Jsynchronous duplicate receipt of changes, expected " + jsync.counter + ", got " + minCounter;
     } else if (minCounter > jsync.counter) {
       if (jsync.one_way !== true) {
         requestMissingRanges(jsync, minCounter, maxCounter, changes);
@@ -311,11 +313,9 @@ function jsynchronousSetup() {
       }
     }
 
-    jsync.counter = maxCounter+1;
-
     var triggerEvents = false;
 
-    for (var i=0; i<changes.length; i++) {
+    for (var i=jsync.counter - minCounter; i<changes.length; i++) {
       var change = changes[i];
 
       if (change === null) { continue }
@@ -328,7 +328,10 @@ function jsynchronousSetup() {
       if (op === 'set' || op === 'delete' || op === 'end') {
         details = jsync.objects[hash];
         if (details === undefined) {
-          throw "Jsynchronous error - " + op + " for an object hash " + hash + " that is not registered with the synchronized variable by name '" + jsync.name + "'";
+          if (op !== 'end') {
+            console.error("Jsynchronous error - " + op + " for an object hash " + hash + " that is not registered with the synchronized variable by name '" + jsync.name + "'");
+          }
+          continue
         }
       }
 
@@ -363,6 +366,8 @@ function jsynchronousSetup() {
         jsync.history.push(change);
       }
     }
+
+    jsync.counter = maxCounter+1;
 
     if (jsync.client_history && jsync.client_history < jsync.history.length) {
       jsync.history = jsync.history.slice(Math.floor(jsync.history.length / 2));
@@ -499,7 +504,6 @@ function jsynchronousSetup() {
     }
 
     if (jsync.secret) {
-      console.warn("Jsynchronous client is out of sync. On counter " + jsync.counter + " got " + minCounter + ". Initiaing resync");
 
       // TODO: Request only missing ranges
       var uniqueId = 'resync' + jsync.name;

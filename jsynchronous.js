@@ -101,6 +101,7 @@ class Deletion {
 
     jsync.communicate(this);
 
+    this.deleted = true;
     delete jsync.objects[this.hash];
   }
   encode() {
@@ -498,23 +499,23 @@ class JSynchronous {
       throw `Jsynchronous requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmittied to connected clients.\nYou can also pass in as an option {send: () => {}} to jsynchronous()`;
     }
 
-    if (websocket === undefined) {
+    if (websocket === undefined || websocket === null) {
       throw "$ync(websocket) requires websocket to be defined as a unique identifier for a client. Either an object, a string, or number.";
     }
 
     if (Array.isArray(websocket)) {
       websocket.forEach(ws => this.sync(ws));
     } else {
+      if (this.wait === false) {
+        this.sendInitial(websocket);
+      }
+
       // Adds the websocket client to a list of websockets to call send(websocket, data) to
       if (!this.listeners.has(websocket)) {
         this.listeners.set(websocket, {secret: null, penalty: 0, lastMessage: 0});
       } else {
         // TODO: Change this to a warn?
         throw 'jsynchronous Error in .jsync(websocket), websocket is already being listened on: ' + websocket;
-      }
-
-      if (this.wait === false) {
-        this.sendInitial(websocket);
       }
     }
   }
@@ -591,19 +592,33 @@ class JSynchronous {
     // The gc should run some time after a property referencing a synced object is deleted or altered
     this.gc.count++;
 
-    if (this.gc.count >= 100000) {
-      this.collectGarbage();  // Force Synchronous gc every 100,000 changes
+    if (this.gc.count >= 1000000) {
+      this.collectGarbage();  // Force Synchronous gc every 1,000,000 changes
     } else {
       this.garbageCollectWhenIdle();
     }
   }
   garbageCollectWhenIdle() {
+    // Garbage collect on average every 20,000ms or 20,000 changes
+    let minTimeout = Math.max(0, 20000 - this.gc.count);
     if (this.gc.timeout === undefined) {
       const now = new Date().getTime();
       this.gc.scheduled = now;
       this.gc.stopwatch = now;
       this.gc.buffer = 0;
-      this.gc.timeout = setTimeout(() => this.testTimeout(), 0);
+      this.gc.target = minTimeout;
+      this.gc.timeout = setTimeout(() => this.testTimeout(), minTimeout);
+console.log('setting gc timeout', minTimeout);
+    } else if (this.gc.target / 16 > minTimeout) {
+console.log('Resetting timeout', minTimeout);
+      // Reset the timer for the next gc if the calculated minTimeout is 
+      if (minTimeout < 16) {
+        minTimeout = 0;
+      }
+
+      clearTimeout(this.gc.timeout);
+      this.gc.target = minTimeout;
+      this.gc.timeout = setTimeout(() => this.testTimeout(), minTimeout);
     }
   }
   testTimeout() {
@@ -632,10 +647,10 @@ class JSynchronous {
 
     let piecesOfGarbage = 0;
     for (let hash in marked) {
+      // Toss out the trash
       piecesOfGarbage++;
       const syncedObject = marked[hash];
-      delete this.objects[syncedObject.hash]; // Toss out the trash
-      syncedObject.deleted = true;
+      new Deletion(this, syncedObject);
     }
     console.log('Collecting garbage', piecesOfGarbage);
 
