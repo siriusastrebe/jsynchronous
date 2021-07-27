@@ -2,9 +2,7 @@
 
 Get your (rapidly changing) data from Node.js->Browser with ease.
 
-Stream updates to any JavaScript data structure with Jsynchronous.js, a real-time data synchronization library. Fast enough for games, flexible enough for graph applications, and tested to precision.
-
-WebSockets revolutionized server->browser messaging but it doesn’t keep your application state synchronized. Jsynchronous ensures all connected clients see the exact same data as what’s on your server - even as your data changes.
+Jsynchronous ensures all connected clients see the exact same data as what’s on your server - even as your data changes. Fast enough for games, flexible enough for graph applications, and tested to precision. 
 
 Create an array or object in Node.js. Jsynchronous will create an identical variable in connected browsers:
 
