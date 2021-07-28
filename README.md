@@ -2,7 +2,7 @@
 
 Get your (rapidly changing) data from Node.js->Browser with ease.
 
-Jsynchronous ensures all connected clients see the same data as what’s on your server - even as your data changes. Fast enough for games, flexible enough for graph applications, and tested to precision. Also can handle server->server sync or browser->server sync.
+Jsynchronous ensures all connected clients see the same data as what’s on your server - even as your data changes. Fast enough for games, flexible enough for graph applications, and tested to precision.
 
 Register an ordinary javascript array or object with jsynchronous on your Node.js server and an identical copy will become available on connected browsers:
 
@@ -47,6 +47,8 @@ data.circular.a.b.c = data.circular;
 
 const $ynced = jsynchronous(data);
 ```
+ 
+Jsynchronous can also handle server->server sync, or (experimentally) browser->server sync.
 
 # Setting up
 
