@@ -2,7 +2,7 @@
 
 Synchronize your rapidly changing app state with all connected browsers.
 
-Jsynchronous ensures all clients see the same data as what’s on your server - even as you make changes to your data. Fast enough for games, flexible enough for graph applications, and tested to precision.
+Jsynchronous ensures all clients see the same data as what’s on your server - even as it changes. Fast enough for games, flexible enough for graph applications, and tested to precision.
 
 Register an ordinary javascript array or object with jsynchronous on your Node.js server and an identical copy will become available on connected browsers:
 
