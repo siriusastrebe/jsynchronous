@@ -1,6 +1,6 @@
 {
   "name": "jsynchronous",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "author": "Sirius Strebe <siriusastrebe@gmail.com> (http://asksiri.us)",
   "repository": {
     "type": "git",
@@ -27,6 +27,6 @@
   "main": "jsynchronous.js",
   "directories": {
     "examples": "examples",
-    "test": "tests"
+    "tests": "tests"
   }
 }
