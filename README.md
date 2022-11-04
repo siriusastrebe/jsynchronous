@@ -52,6 +52,8 @@ Jsynchronous can also handle server->server sync, or (experimentally) browser->s
 
 # Setting up
 
+Follow the [example code snippets](https://github.com/siriusastrebe/jsynchronous/tree/master/examples) for easy integration.
+
 Jsynchronous does not lock you into a transportation medium you use whether it be [socket.io](https://socket.io/) [ws](https://www.npmjs.com/package/ws) [Primus](https://www.npmjs.com/package/primus), [EventSource](https://developer.mozilla.org/en-US/docs/Web/API/EventSource), or [webRTC](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API). Any protocol with eventual in-order delivery works. We will be using [ws](https://www.npmjs.com/package/ws) in this example.
 
 The server side setup consists of 3 required steps:
