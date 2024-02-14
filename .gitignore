@@ -3,3 +3,5 @@ node_modules
 package-lock.json
 /app.js
 /index.html
+tests/selenium/chromedriver
+tests/selenium/geckodriver
