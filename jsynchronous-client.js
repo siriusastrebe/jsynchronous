@@ -62,7 +62,7 @@ function jsynchronousSetup() {
         if (jsynchronous.send) {
           var uniqueId = 'initial' + name;
           communicateWithBackoff(uniqueId, ['initial', name], function () {
-console.log('Unknown jsynchronous variable, requesting initial' + name);
+            console.log('Unknown jsynchronous variable, requesting initial' + name);
             return jsyncs[name] === undefined;
           }, 2000);
         } else {
@@ -666,11 +666,6 @@ console.log('Unknown jsynchronous variable, requesting initial' + name);
 
   function addSynchronizedVariableMethods(jsync, targetVariable, reservedWords) {
     // targetVariable will be details.variable if it's synced. Otherwise it should be a stand-in variable
-    for (var key in clientReservedWords) {
-      if (typeof targetVariable[key] === 'function') {
-        delete targetVariable[key];
-      }
-    }
     if (reservedWords === undefined) reservedWords = {}
     for (var key in clientReservedWords) { 
       if (!reservedWords[key]) {
