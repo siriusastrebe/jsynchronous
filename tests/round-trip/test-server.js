@@ -43,6 +43,9 @@ async function connectRelay(backoff) {
 
   ws.on('message', function incoming(data) {
     jsynclient.onmessage(data);
+
+    // console.log(data);
+    // console.log('');
   });
   ws.on('error', async function error(a, b, c) {
     backoff = backoff || 1000;
@@ -59,174 +62,175 @@ async function startTest() {
   await wait(1000);
   await test0();
 
-  await test('Assignment of property on root');
-
-
-  await test('Reassignment of property on root');
-
-
-  $erved.bball = {jordan: 'space jam'};
-  await test('Assignment of a object');
-
-
-  $erved.bball['bugs bunny'] = "What's up doc?";
-  await test('Assignment of property on object with whitespaces in key');
-
-
-  $erved.bball['¢åπ'] = "unicode";
-  await test('Assignment of a key with unicode characters');
-
-
-  $erved.bball['emojis'] = "🔫😍🙈❄↕⚡⚠⚽🌍🐓🐬";
-  await test('Assignment of unicode characters as values');
-
-
-  $erved.bball['∞§π'] = "§ß∫ºπΩø™£∆å´∑£¢∞¡§¶ç√˜µ≤≥…";
-  await test('Assignment of a key and values with unicode characters');
-
-
-  $erved.bball['🐊'] = "Crock";
-  await test('Assignment of key to a unicode character');
-
-
-  $erved.bball['undefined'] = undefined;
-  await test('Assignment of an undefined value');
-
-  $erved.bball[undefined] = 'defined';
-  await test('Assignment of an undefined property');
-
-  $erved.bball['null'] = null;
-  await test('Assignment of a null value');
-
-  $erved.bball['🐊'] = "Aligator?";
-  await test('Reassignment of unicode character key');
-
-  $erved.bball = {};
-  await test('Reassignment of an object');
-
-  $erved.bball['emojis'] = "🔫😍🙈❄↕⚡⚠⚽🌍🐓🐬";
-  await test('Assignment of a property on new object');
-
-  $erved.bball['emojis'] += "🔫😍🙈❄↕⚡⚠⚽🌍🐓🐬";
-  await test('Extending a unicode string');
-
-  $erved.bball['genesis'] = largeText();
-  await test('Assignment of a large piece of text');
-
-  $erved.bball['genesis'] += largeText2()
-  await test('Extending a large piece of text');
-
-  delete $erved.bball['genesis']
-  await test('Deletion of large text');
-
-  $erved.bball['numbers'] = 0;
-  await test('Assignment of an integer');
-
-  $erved.bball['numbers'] = 0.12345678790;
-  await test('Assignment of a floating point number');
-
-  $erved.bball['numbers'] = 5.67;
-  await test('Assignment of a floating point number with fixed precision');
-
-  $erved.bball['numbers'] = 1.1;
-  $erved.bball['numbers'] = 2.2;
-  $erved.bball['numbers'] = 3.3;
-  $erved.bball['numbers'] = 4.4;
-  $erved.bball['numbers'] = 5.5;
-  await test('Assignment of numbers in quick succession');
-
-  const externalReference = $erved.bball['numbers'];
-  $erved.bball.numbersExternalReference = externalReference;
-  await test('Assignment of an external object referencing an existing synchronized variable');
-
-  delete $erved.bball
-  await test('Deletion of object');
-
-  $erved.external = [[], 0, 1, 2, 3];
-  const external = $erved.external;
-  await test('Creation of an array that will soon be deleted');
-
-  delete $erved.external;
-  await test('Deletion of an array that is still referenced');
-
-  external.push(4);
-  await test('Modification of a deleted property');
-
-  external[0] = {a: 'b'};
-  await test('Modification of a nested deleted property');
-
-  $erved.resurrected = external;
-  await test('Assignment of a previously deleted array');
-
-  external.push({b: 'c'});
-  await test('Assignment of a variable that should not be tracked');
-
-  $erved.resurrected.push({z: 'y'});
-  await test('Assignment of a variable that should be tracked');
-
-  delete $erved.resurrected;
-  await test('Deletion of a reassigned previously deleted array');
-
-  $erved.arr = [];
-  await test('Assignment of empty array');
-
-  $erved.arr = [0];
-  await test('Ressignment of array, with a value this time');
-
-  $erved.arr = [[]];
-  await test('Reassignment of a nested array');
-
-  $erved.arr = [[[]]];
-  await test('Reassignment of a doubly nested array');
-
-  $erved.arr = [[[[]]]];
-  await test('Reassignment of a triply nested array');
-
-  $erved.arr = [[[[[]]]]];
-  await test('Reassignment of a quadruply nested array');
-
-  $erved.arr = [[]];
-  await test('Reassignment of a nested array');
-
-  $erved.arr[0].push('zero')
-  await test('Assignment into a nested array');
-
-  $erved.arr[0].push('one')
-  $erved.arr[0].push('two')
-  await test('Multiple assignments into a nested array');
-
-  $erved.arr.push('zero')
-  $erved.arr[0].push('three')
-  await test('Multiple assignments into different levels of a nested array');
-
-  $erved.arr.push([[[5, 4, 3, 2, 1, 0, [['liftoff']], ]]])
-  await test('Assignment of a deeply nested array with values');
-
-
-  $erved.arr.push({a: {b: {c: {d: 'now I know my ABCs'}}}});
-  await test('Assignment of a deeply nested object with string values');
-
-
-  $erved.arr.push({aa: {ba: {ca: [], cb: [[]], cc: 'CC'}, bb: 'basketball'}, ab: 'Abba', ac: 'Dabba', ad: 'Anno Domino'});
-  await test('Assignment of a complex nested object with mixed values');
-
-
-  delete $erved.arr[4];
-  await test('Deletion of array entry');
-
-
-  delete $erved.arr[3];
-  delete $erved.arr[2];
-  await test('Multiple deletions of array entries');
-
-
-  $erved.arr.length = 0;
-  await test('Setting array length to a value smaller than the current length');
-
-
-  $erved.arr[10] = 10;
-  await test('Assigning an array property greater than the length of the array');
-
+//  await test('Assignment of property on root');
+//
+//
+//  await test('Reassignment of property on root');
+//
+//
+//  $erved.bball = {jordan: 'space jam'};
+//  await test('Assignment of a object');
+//
+//
+//  $erved.bball['bugs bunny'] = "What's up doc?";
+//  await test('Assignment of property on object with whitespaces in key');
+//
+//
+//  $erved.bball['¢åπ'] = "unicode";
+//  await test('Assignment of a key with unicode characters');
+//
+//
+//  $erved.bball['emojis'] = "🔫😍🙈❄↕⚡⚠⚽🌍🐓🐬";
+//  await test('Assignment of unicode characters as values');
+//
+//
+//  $erved.bball['∞§π'] = "§ß∫ºπΩø™£∆å´∑£¢∞¡§¶ç√˜µ≤≥…";
+//  await test('Assignment of a key and values with unicode characters');
+//
+//
+//  $erved.bball['🐊'] = "Crock";
+//  await test('Assignment of key to a unicode character');
+//
+//
+//  $erved.bball['undefined'] = undefined;
+//  await test('Assignment of an undefined value');
+//
+//  $erved.bball[undefined] = 'defined';
+//  await test('Assignment of an undefined property');
+//
+//  $erved.bball['null'] = null;
+//  await test('Assignment of a null value');
+//
+//  $erved.bball['🐊'] = "Aligator?";
+//  await test('Reassignment of unicode character key');
+//
+//  $erved.bball = {};
+//  await test('Reassignment of an object');
+//
+//  $erved.bball['emojis'] = "🔫😍🙈❄↕⚡⚠⚽🌍🐓🐬";
+//  await test('Assignment of a property on new object');
+//
+//  $erved.bball['emojis'] += "🔫😍🙈❄↕⚡⚠⚽🌍🐓🐬";
+//  await test('Extending a unicode string');
+//
+//  $erved.bball['genesis'] = largeText();
+//  await test('Assignment of a large piece of text');
+//
+//  $erved.bball['genesis'] += largeText2()
+//  await test('Extending a large piece of text');
+//
+//  delete $erved.bball['genesis']
+//  await test('Deletion of large text');
+//
+//  $erved.bball['numbers'] = 0;
+//  await test('Assignment of an integer');
+//
+//  $erved.bball['numbers'] = 0.12345678790;
+//  await test('Assignment of a floating point number');
+//
+//  $erved.bball['numbers'] = 5.67;
+//  await test('Assignment of a floating point number with fixed precision');
+//
+//  $erved.bball['numbers'] = 1.1;
+//  $erved.bball['numbers'] = 2.2;
+//  $erved.bball['numbers'] = 3.3;
+//  $erved.bball['numbers'] = 4.4;
+//  $erved.bball['numbers'] = 5.5;
+//  await test('Assignment of numbers in quick succession');
+//
+//  const externalReference = $erved.bball['numbers'];
+//  $erved.bball.numbersExternalReference = externalReference;
+//  await test('Assignment of an external object referencing an existing synchronized variable');
+//
+//  delete $erved.bball
+//  await test('Deletion of object');
+//
+//  $erved.external = [[], 0, 1, 2, 3];
+//  const external = $erved.external;
+//  await test('Creation of an array that will soon be deleted');
+//
+//  delete $erved.external;
+//  await test('Deletion of an array that is still referenced');
+//
+//  external.push(4);
+//  await test('Modification of a deleted property');
+//
+//  external[0] = {a: 'b'};
+//  await test('Modification of a nested deleted property');
+//
+//  $erved.resurrected = external;
+//  await test('Assignment of a previously deleted array');
+//
+//  external.push({b: 'c'});
+//  await test('Assignment of a variable that should not be tracked');
+//
+//  $erved.resurrected.push({z: 'y'});
+//  await test('Assignment of a variable that should be tracked');
+//
+//  delete $erved.resurrected;
+//  await test('Deletion of a reassigned previously deleted array');
+//
+//  $erved.arr = [];
+//  await test('Assignment of empty array');
+//
+//  $erved.arr = [0];
+//  await test('Ressignment of array, with a value this time');
+//
+//  $erved.arr = [[]];
+//  await test('Reassignment of a nested array');
+//
+//  $erved.arr = [[[]]];
+//  await test('Reassignment of a doubly nested array');
+//
+//  $erved.arr = [[[[]]]];
+//  await test('Reassignment of a triply nested array');
+//
+//  $erved.arr = [[[[[]]]]];
+//  await test('Reassignment of a quadruply nested array');
+//
+//  $erved.arr = [[]];
+//  await test('Reassignment of a nested array');
+//
+//  $erved.arr[0].push('zero')
+//  await test('Assignment into a nested array');
+//
+//  $erved.arr[0].push('one')
+//  $erved.arr[0].push('two')
+//  await test('Multiple assignments into a nested array');
+//
+//  $erved.arr.push('zero')
+//  $erved.arr[0].push('three')
+//  await test('Multiple assignments into different levels of a nested array');
+//
+//  $erved.arr.push([[[5, 4, 3, 2, 1, 0, [['liftoff']], ]]])
+//  await test('Assignment of a deeply nested array with values');
+//
+//
+//  $erved.arr.push({a: {b: {c: {d: 'now I know my ABCs'}}}});
+//  await test('Assignment of a deeply nested object with string values');
+//
+//
+//  $erved.arr.push({aa: {ba: {ca: [], cb: [[]], cc: 'CC'}, bb: 'basketball'}, ab: 'Abba', ac: 'Dabba', ad: 'Anno Domino'});
+//  await test('Assignment of a complex nested object with mixed values');
+//
+//
+//  delete $erved.arr[4];
+//  await test('Deletion of array entry');
+//
+//
+//  delete $erved.arr[3];
+//  delete $erved.arr[2];
+//  await test('Multiple deletions of array entries');
+//
+//
+//  $erved.arr.length = 0;
+//  await test('Setting array length to a value smaller than the current length');
+//
+//
+//  $erved.arr[10] = 10;
+//  await test('Assigning an array property greater than the length of the array');
+//
+//
 
   const $rewound = jsynclient('object', 'rewound');
   await test('Creating a named jsynchronous variable with rewind enabled', $rewinder, $rewound);

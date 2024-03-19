@@ -1,5 +1,7 @@
 'use strict';
 
+const ENCODE = false;
+
 const TYPE_ENCODINGS = {
   'array': 0,
   'object': 1,
@@ -35,12 +37,11 @@ const clientReservedWords = {
 
 const syncedNames = {};
 
-
 class Change {
   constructor(syncedObject, operation, prop, value, type, oldValue, oldType) {
     // A change exists in the space of two moments in time for objects that may not exist earlier or presently.
     // It's important for garbage collection that a change does not directly reference any synced variables, only hashes.
-    const jsync = syncedObject.jsync
+    const jsync = syncedObject.jsync;
 
     this.id = jsync.counter++;
     this.time = new Date().getTime();
@@ -60,7 +61,8 @@ class Change {
   }
   encode() {
     const change = [
-      OP_ENCODINGS[this.operation],
+      encodeOp(this.operation),
+
       this.hash,
       this.prop,
       encode(this.value, this.type),
@@ -82,7 +84,7 @@ class Creation {
   }
   encode() {
     const creation = [
-      OP_ENCODINGS[this.operation],
+      encodeOp(this.operation),
       this.description[0],
       this.description[1],
       this.description[2]
@@ -106,7 +108,7 @@ class Deletion {
   }
   encode() {
     const deletion = [
-      OP_ENCODINGS[this.operation],
+      encodeOp(this.operation),
       this.hash
     ]
     return deletion;
@@ -132,7 +134,7 @@ class Snapshot {
   } 
   encode() {
     const snapshot = [
-       OP_ENCODINGS[this.operation],
+       encodeOp(this.operation),
        this.id,
        this.name
     ]
@@ -272,7 +274,7 @@ class SyncedObject {
   describe() {
     const state = [
       this.hash,
-      TYPE_ENCODINGS[this.type],
+      encodeType(this.type),
       newCollection(this.type, this.proxy)
     ]
 
@@ -435,7 +437,7 @@ class JSynchronous {
     }
 
     for (let [websocket, listener] of this.listeners) {
-      this.send(websocket, JSON.stringify([OP_ENCODINGS['changes'], this.name, min, max, changes]));
+      this.send(websocket, JSON.stringify([encodeOp('changes'), this.name, min, max, changes]));
     }
 
     // Now that it's sent, the rest is history
@@ -470,7 +472,7 @@ class JSynchronous {
           return c.encode();
         });
 
-        this.send(websocket, JSON.stringify([OP_ENCODINGS['changes'], this.name, min, max, changes]));
+        this.send(websocket, JSON.stringify([encodeOp('changes'), this.name, min, max, changes]));
       }
     }
   }
@@ -557,7 +559,7 @@ class JSynchronous {
     } catch (e) {
       listener.penalty += 5;  // Penalize clients heavily if they trigger errors
       console.error("Jsynchronous client->server onmessage error", e);
-      jsynchronous.send(websocket, JSON.stringify([OP_ENCODINGS['error'], e.toString()]));
+      jsynchronous.send(websocket, JSON.stringify([encodeOp('error'), e.toString()]));
     }
   }
   handshake(websocket, listener, rootHash) {
@@ -567,7 +569,7 @@ class JSynchronous {
 
     let secret = listener.secret || randomHash();  // no need to worry about collisions. Secrets aren't shared.
     listener.secret = secret;
-    this.send(websocket, JSON.stringify([OP_ENCODINGS['handshake'], this.name, secret]));
+    this.send(websocket, JSON.stringify([encodeOp('handshake'), this.name, secret]));
   }
   resync(websocket, listener, json) {
     let secret = json[2];
@@ -578,17 +580,17 @@ class JSynchronous {
       let historyMax = historyMin + (max-min);
       if (historyMin === -1 || historyMax >= this.history.length) {
         // TODO: Hard reset on client
-        let payload = [OP_ENCODINGS['error'], 'Unable to resync'];
+        let payload = [encodeOp('error'), 'Unable to resync'];
         jsynchronous.send(websocket, JSON.stringify(payload));
       } else {
         let slice = this.history.slice(historyMin, historyMax);
         let encoded = slice.map((h) => h.encode());
-        let payload = [OP_ENCODINGS['changes'], this.name, min, max-1, encoded];
+        let payload = [encodeOp('changes'), this.name, min, max-1, encoded];
         this.send(websocket, JSON.stringify(payload));
       }
     } else {
       // TODO: Tear this out, we don't need to be polite to clients that fail the secret check
-      let payload = [OP_ENCODINGS['error'], 'Secret check failed'];
+      let payload = [encodeOp('error'), 'Secret check failed'];
       jsynchronous.send(websocket, JSON.stringify(payload));
     }
   }
@@ -712,7 +714,7 @@ class JSynchronous {
     }
 
     const fullState = [
-      OP_ENCODINGS['initial'],
+      encodeOp('initial'),
       this.name,
       this.counter,
       settings
@@ -1020,7 +1022,7 @@ function labelEmpty(source, target) {
     if (value === undefined) {
       allKeys = allKeys || Object.keys(source).map(k => Number(k));
       if (binarySearch(allKeys, ((a) => a - i)) === -1) { 
-        target[i] = [TYPE_ENCODINGS['empty']];
+        target[i] = [encodeType('empty')];
       }
     }
   }
@@ -1028,7 +1030,7 @@ function labelEmpty(source, target) {
 
 function encode(value, type) {
   // Expects value to be either be a primitive or a syncedObject Proxy
-  const encoded = [TYPE_ENCODINGS[type]];
+  const encoded = [encodeType(type)];
 
   if (isPrimitive(type)) {
     const p = encodePrimitive(value, type)
@@ -1065,4 +1067,18 @@ function getOp(number) {
     if (value === number) return key;
   }
   return false;
+}
+function encodeOp(op) {
+  if (ENCODE) {
+    return OP_ENCODINGS[op];
+  } else {
+    return op;
+  }
+}
+function encodeType(type) {
+  if (ENCODE) {
+    return TYPE_ENCODINGS[type];
+  } else {
+    return type;
+  }
 }

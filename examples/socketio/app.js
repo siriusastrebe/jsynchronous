@@ -1,5 +1,5 @@
 const express = require('express');
-const jsynchronous = require('jsynchronous');
+const jsynchronous = require('../../jsynchronous.js');
 const { Server } = require("socket.io");
 
 const app = express();

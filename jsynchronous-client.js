@@ -1,6 +1,8 @@
 var jsynchronous;
 
 function jsynchronousSetup() {
+  var ENCODE = false;
+
   var TYPE_ENCODINGS = [
     'array',
     'object',
@@ -31,7 +33,8 @@ function jsynchronousSetup() {
     '$info': true,
     '$on': true,
     '$rewind': true,
-    '$copy': true
+    '$copy': true,
+    '$details': true,
   }
 
   var jsyncs = {}
@@ -40,7 +43,7 @@ function jsynchronousSetup() {
 
   function onmessage(data) {
     var json = JSON.parse(data);
-    var op = OP_ENCODINGS[json[0]]; 
+    var op = decodeOp(json[0]);
     var name = json[1];
 
     if (op === 'initial') {
@@ -116,6 +119,7 @@ function jsynchronousSetup() {
       objects: {},  // key-> value corresponds to details.hash->details
       root: undefined,
       changesEvents: [],
+      changeEvents: [],
       snapshotEvents: [],
       standIn: standIn || false,
       rewind: settings.rewind || false,
@@ -128,6 +132,7 @@ function jsynchronousSetup() {
       staging: {
         references: []
       },
+      changeList: [],
       storedChanges: [],
       resyncs: []
     }
@@ -140,7 +145,7 @@ function jsynchronousSetup() {
   }
 
   function newJsynchronous(name, counter, settings, data) {
-    var rootType = TYPE_ENCODINGS[data[0][1]];
+    var rootType = decodeType(data[0][1]);
     var jsync = jsyncObject(name, counter, settings);
     var reserved;
     if (settings) reserved = settings.reserved;
@@ -152,7 +157,7 @@ function jsynchronousSetup() {
     for (var i=0; i<data.length; i++) {
       var d = data[i];
       var hash = d[0];
-      var type = TYPE_ENCODINGS[d[1]];
+      var type = decodeType(d[1]);
       var each = d[2];
       var description = createSyncedVariable(hash, type, each, jsync, (i === 0)); 
 
@@ -226,7 +231,7 @@ function jsynchronousSetup() {
     return standIn;
   }
   function copyEvents(source, target) {
-    var eventTypes = {'changes': 'changesEvents', 'snapshot': 'snapshotEvents'};
+    var eventTypes = {'changes': 'changesEvents', 'change': 'changeEvents', 'snapshot': 'snapshotEvents'};
 
     for (var eventName in eventTypes) {
       for (var i=0; i<source[eventTypes[eventName]].length; i++) {
@@ -249,9 +254,9 @@ function jsynchronousSetup() {
       hash: hash,
       type: type,
       variable: undefined,
-      descendants: {}, // key->value corresponds to descendant.hash->[properties]. Follow properties to find descendant
       parents: {},     // key->value corresponds to parentHash->{details: parent, props: []}
-      children: {}     // key->value corresponds to childHash->{details: child, props: []}
+      // descendants: {}, // key->value corresponds to descendant.hash->[properties]. Follow properties to find descendant
+      // children: {}     // key->value corresponds to childHash->{details: child, props: []}
     }
 
     if (existing && detailedType(existing.variable) === type) {
@@ -266,12 +271,13 @@ function jsynchronousSetup() {
     jsync.objects[hash] = details;
 
     enumerate(each, type, function (prop, encoded) {
-      var t = TYPE_ENCODINGS[encoded[0]]
+      var t = decodeType(encoded[0])
       var v = encoded[1];
 
       if (isPrimitive(t)) {
         if (t !== 'empty') {
           details.variable[prop] = resolvePrimitive(t, v);
+          jsync.changeList.push({op: 'set', type: t, hash: hash, prop: prop, value: resolvePrimitive(t, v)});
         }
       } else {
         var reference = {
@@ -280,6 +286,7 @@ function jsynchronousSetup() {
           hash: v
         }
         jsync.staging.references.push(reference);  // We need to wait for all variables to be registered, esp in circular data structures
+        jsync.changeList.push({op: 'set', type: t, hash: hash, prop: prop, value: v});
       }
     });
 
@@ -291,12 +298,11 @@ function jsynchronousSetup() {
     for (var j=0; j<references.length; j++) {
       var r = references[j];
       var childDetails = resolveSyncedVariable(r.hash, jsync);
-      //link(r.details, childDetails, r.prop);
       r.details.variable[r.prop] = childDetails.variable;
+      trackParentage(r.details, childDetails, r.prop);
     }
     jsync.staging.references.length = 0;
   }
-
 
   function processChanges(minCounter, maxCounter, changes, jsync) {
     if (minCounter < jsync.counter) {
@@ -320,7 +326,7 @@ function jsynchronousSetup() {
 
       if (change === null) { continue }
 
-      var op = OP_ENCODINGS[change[0]];
+      var op = decodeOp(change[0]);
       var hash = change[1];
       var details;
       var pt;
@@ -347,7 +353,7 @@ function jsynchronousSetup() {
       } else if (op === 'new') {
         var type = change[2];
         var each = change[3];
-        createSyncedVariable(hash, TYPE_ENCODINGS[type], each, jsync); 
+        createSyncedVariable(hash, decodeType(type), each, jsync); 
       } else if (op === 'end') {
         endObject(details, jsync);
       } else if (op === 'snapshot') {
@@ -389,18 +395,9 @@ function jsynchronousSetup() {
   }
   function set(details, prop, newDetails, oldDetails, jsync) {
     var object = details.variable;
-    var type = TYPE_ENCODINGS[newDetails[0]];
+    var type = decodeType(newDetails[0]);
     var value;
-
-    if (isPrimitive(type)) {
-      value = resolvePrimitive(type, newDetails[1]);
-    } else {
-      var childDetails = resolveSyncedVariable(newDetails[1], jsync);
-      //link(details, childDetails, prop, jsync);
-      value = childDetails.variable;
-    }
-
-    var oldType = TYPE_ENCODINGS[oldDetails[0]];
+    var oldType = decodeType(oldDetails[0]);
     var oldValue;
 
     if (isPrimitive(oldType)) {
@@ -408,23 +405,42 @@ function jsynchronousSetup() {
     } else {
       var childDetails = resolveSyncedVariable(oldDetails[1], jsync);
       oldValue = childDetails.variable;
+      if (isParent(details, childDetails)) {
+        untrackParentage(details, childDetails, prop);
+      }
+    }
+ 
+    if (isPrimitive(type)) {
+      value = resolvePrimitive(type, newDetails[1]);
+    } else {
+      var childDetails = resolveSyncedVariable(newDetails[1], jsync);
+      value = childDetails.variable;
+      trackParentage(details, childDetails, prop);
     }
 
+
     object[prop] = value;
+
+    var change = {op: 'set', type: type, hash: details.hash, prop: prop, value: value, oldValue: oldValue, oldType: oldType}
+    triggerChangeEvent(jsync, change);
   }
   function del(details, prop, oldDetails, jsync) {
     var object = details.variable;
-    var oldType = TYPE_ENCODINGS[oldDetails[0]];
-    var oldValue = oldDetails[1];
+    var oldType = decodeType(oldDetails[0]);
+    var oldValue;
 
     if (isPrimitive(oldType)) {
       oldValue = resolvePrimitive(oldType, oldDetails[1]);
     } else {
-      var child = resolveSyncedVariable(oldDetails[1], jsync);
-      //unlink(details, child, prop);
+      var removedDetails = resolveSyncedVariable(oldDetails[1], jsync);
+      oldValue = removedDetails.variable;
+      untrackParentage(details, removedDetails, prop);
     }
 
     delete object[prop];
+
+    var change = {op: 'delete', hash: details.hash, prop: prop, value: undefined, oldValue: oldValue, oldType: detailedType(oldValue)}
+    triggerChangeEvent(jsync, change);
   }
   function endObject(details, jsync) {
     // Memento mori
@@ -477,7 +493,7 @@ function jsynchronousSetup() {
     jsync.snapshots[name] = {counter: counter, name: name};
 
     for (var i=0; i<jsync.snapshotEvents.length; i++) {
-      const ev = jsync.snapshotEvents[i];
+      var ev = jsync.snapshotEvents[i];
       ev.callback(name);
     }
   }
@@ -560,7 +576,7 @@ function jsynchronousSetup() {
     }
   }
   function detailedType(value) {
-    const type = typeof value;
+    var type = typeof value;
     if (type !== 'object') {
       return type;  // 'boolean' 'string' 'undefined' 'number' 'bigint' 'symbol'
     } else if (value === null) {
@@ -579,11 +595,11 @@ function jsynchronousSetup() {
       return 'object'  // If we can't figure out what it is, most things in javascript are objects
     }
   }
-
   function resolveSyncedVariable(hash, jsync) {
     var details = jsync.objects[hash];
     if (details === undefined) {
-      throw "Jsynchronous error - Referenced variable can't be found with hash " + hash;
+      console.trace();
+      throw "Jsynchronous error - Referenced variable can't be found with hash " + hash + ", objects registered: " + Object.keys(jsync.objects).length;
     }
     return details;
   }
@@ -645,12 +661,12 @@ function jsynchronousSetup() {
       return mirrored[index];
     }
 
-    const type = detailedType(target);
+    var type = detailedType(target);
 
     if (isPrimitive(type)) {
       return target;
     } else {
-      const mirror = newCollection(type, target);
+      var mirror = newCollection(type, target);
 
       visited.push(target);
       mirrored.push(mirror);
@@ -682,7 +698,7 @@ function jsynchronousSetup() {
         for (var i=0; i<3; i++) {
           var arg = [firstArg, secondArg, thirdArg][i];
           var argType = detailedType(arg);
-          if (argType === 'array') {
+          if (argType === 'array' || argType === 'string' || argType === 'boolean' || argType === 'number') {
             props = arg;
           } else if (argType === 'object') {
             options = arg;
@@ -698,6 +714,8 @@ function jsynchronousSetup() {
         var e = {event: event, props: props, options: options, callback: callback};
         if (e.event === 'changes') {
           jsync.changesEvents.push(e);
+        } else if (e.event === 'change') {
+          jsync.changeEvents.push(e);
         } else if (e.event === 'snapshot') {
           jsync.snapshotEvents.push(e);
         } else {
@@ -740,21 +758,159 @@ function jsynchronousSetup() {
       writable: true,
     });
 
+    Object.defineProperty(targetVariable, reservedWords['$details'], {
+      value: jsync.root,
+      writable: true,
+    });
+
     if (jsync.rewind === true) {
       Object.defineProperty(targetVariable, reservedWords['$rewind'], {
         value: function $rewind(snapshot, counter) {
+console.log('Rewinding,', snapshot, counter)
           return rewind(jsync, snapshot, counter);
         },
         writable: true,
       });
     }
   }
-  function triggerChanges(jsync, callback) {
+  function triggerChanges(jsync) {
+    triggerChangeEvents(jsync);
+
     for (var j=0; j<jsync.changesEvents.length; j++) {
       var e = jsync.changesEvents[j];
       var variable = jsync.root.variable;
       e.callback(variable);
     }
+  }
+  function triggerChangeEvents(jsync, callback) {
+    for (var i=0; i<jsync.changeList.length; i++) {
+      var c = jsync.changeList[i];
+
+      if (c.value !== undefined) {
+        if (isPrimitive(c.type)) {
+          c.value = c.value;
+        } else {
+          c.value = resolveSyncedVariable(c.value, jsync).variable;
+        }
+      }
+
+      if (c.oldValue !== undefined) {
+        if (isPrimitive(c.oldValue)) {
+          c.oldValue = c.oldValue;
+        } else {
+          c.oldValue = resolveSyncedVariable(c.oldValue, jsync).variable;
+        }
+      }
+
+      triggerChangeEvent(jsync, c);
+    }
+    jsync.changeList.length = 0; // Is there a use case where we would want to store changes?
+  }
+  function triggerChangeEvent(jsync, c) {
+    var details = resolveSyncedVariable(c.hash, jsync);
+    var variable = details.variable;
+
+    var allPaths = getPathsFromRoot(details);
+
+    for (var j=0; j<jsync.changeEvents.length; j++) {
+      var e = jsync.changeEvents[j];
+      var paths;
+      var trigger;
+      if (detailedType(e.props) === 'string') {
+        var filterstring = e.props;
+        var paths = pathFilter(filterstring, allPaths);
+        trigger = paths.length !== 0;
+      }
+      if (trigger) {
+        var payload = {variable: variable, value: c.value, prop: c.prop, op: c.op, type: c.type, paths: paths, oldValue: c.oldValue, oldType: c.oldType}
+        e.callback(payload);
+      }
+    }
+  }
+  function pathFilter(filterstring, paths) {
+    var tokens = [];
+    var currentToken = '';
+    var successes = [];
+    for (let i=0; i<filterstring.length; i++) {
+      if (filterstring[i] === '.' || filterstring[i] === '[' || filterstring[i] === ']') {
+        tokens.push(currentToken);
+        currentToken = '';
+      } else if (i === filterstring.length - 1) {
+        currentToken += filterstring[i];
+        tokens.push(currentToken)
+      } else {
+        currentToken += filterstring[i];
+      }
+    }
+
+    for (let i=0; i<paths.length; i++) {
+      var path = paths[i];
+      var match = true;
+      if (path.length !== tokens.length) {
+        break;
+      }
+      for (let j=0; j<path.length; j++) {
+        if (tokens[j] !== '*' && tokens[j] !== path[j]) {
+          match = false;
+        }
+      }
+      if (match) {
+        successes.push(path);
+      }
+    }
+    return successes;
+  }
+
+  function getPathsFromRoot(details, seen) {
+    // Returns an array of arrays with the inner array consisting of strings for property along the path
+    if (!seen) seen = {};
+    seen[details.hash] = true;
+    let arr = [];
+    var parentHashes = Object.keys(details.parents);
+    if (parentHashes.length === 0) {
+      return [[]];
+    }
+    for (let i=0; i<parentHashes.length; i++) {
+      var relation = details.parents[parentHashes[i]];
+      var parentDetails = relation.details;
+      if (!seen[parentDetails.hash]) {
+        var parentPaths = getPathsFromRoot(parentDetails, seen);
+        for (let j=0; j<relation.props.length; j++) {
+          for (var k=0; k<parentPaths.length; k++) {
+            arr.push(parentPaths[k].concat(relation.props[j]));
+          }
+        }
+      }
+    }
+    return arr;
+  }
+
+  function trackParentage(parentDetails, childDetails, prop) {
+    if (childDetails.parents[parentDetails.hash] === undefined) {
+      childDetails.parents[parentDetails.hash] = {details: parentDetails, props: [prop]}
+    } else {
+      var relation = childDetails.parents[parentDetails.hash]; // .parents key->value corresponds to parentHash->{details: parent, props: []}
+      var existing = false;
+      for (var j=0; j<childDetails.parents[parentDetails.hash].props.length; j++) {
+        if (childDetails.parents[parentDetails.hash].props[j] === prop) {
+          existing = true; 
+        }
+      }
+      if (!existing) {
+        relation.props.push(prop);
+      }
+    }
+  }
+  function untrackParentage(parentDetails, childDetails, prop) {
+    var relation = childDetails.parents[parentDetails.hash];
+    var index = relation.props.indexOf(prop);
+    relation.props.splice(index, 1);
+    if (relation.props.length === 0) {
+      delete childDetails.parents[parentDetails.hash]
+    }
+  }
+  function isParent(parentDetails, childDetails) {
+    return childDetails[parentDetails.hash];
   }
 
   // ----------------------------------------------------------------
@@ -762,13 +918,27 @@ function jsynchronousSetup() {
   // ----------------------------------------------------------------
   function communicate(op, a, b, c, d) {
     var payload = []
-    payload.push(OP_ENCODINGS.indexOf(op));
+    payload.push(ENCODE ? OP_ENCODINGS.indexOf(op) : op);
     if (a !== undefined) payload.push(a);
     if (b !== undefined) payload.push(b);
     if (c !== undefined) payload.push(c);
     if (d !== undefined) payload.push(d);
 
     jsynchronous.send(JSON.stringify(payload));
+  }
+  function decodeOp(op) {
+    if (ENCODE) {
+      return OP_ENCODINGS[op];
+    } else {
+      return op;
+    }
+  }
+  function decodeType(type) {
+    if (ENCODE) {
+      return TYPE_ENCODINGS[type];
+    } else {
+     return type;
+    }
   }
 
   function communicateWithBackoff(uniqueId, args, resendFunc, timeout) {
@@ -821,6 +991,7 @@ function jsynchronousSetup() {
 }
 jsynchronousSetup();
 
+//export default jsynchronous;
 exports = jsynchronous;
 if (typeof module === 'object') {
   module.exports = jsynchronous;
