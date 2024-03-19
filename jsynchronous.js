@@ -244,7 +244,7 @@ class SyncedObject {
             throw `Jsynchronous sanity error - previously referenced variable was not being tracked.`
           }
 
-          syncedObject.jsync.scheduleGarbageCollect();
+          // syncedObject.jsync.scheduleGarbageCollect();
         }
 
         return true;
@@ -263,7 +263,7 @@ class SyncedObject {
             throw `Jsynchronous sanity error - previously referenced variable was not being tracked.`
           }
 
-          syncedObject.jsync.scheduleGarbageCollect();
+          // syncedObject.jsync.scheduleGarbageCollect();
         }
 
         delete obj[prop];
@@ -314,16 +314,16 @@ class JSynchronous {
     this.history = [];
     this.snapshots = {};
     this.rewindInitial = undefined;
-    this.gc = {
-      count: 0,
-      collected: 0,
-      timeout: undefined,
-      maxTimeout: 60000,
-      scheduled: null,
-      stopwatch: null,
-      triggers: 0,
-      buffer: 0
-    };
+    // this.gc = {
+    //   count: 0,
+    //   collected: 0,
+    //   timeout: undefined,
+    //   maxTimeout: 60000,
+    //   scheduled: null,
+    //   stopwatch: null,
+    //   triggers: 0,
+    //   buffer: 0
+    // };
 
     // These variables are special method names on the root of a synchronized variable. They will throw an error if you reassign these methods, so you can rename these methods by passing them into the options.
     this.defaults = {
@@ -399,8 +399,8 @@ class JSynchronous {
       history_length: this.history.length,
       reserved_words: Object.keys(this.reserved),
       listeners: [ ...this.listeners.keys() ],
-      garbageSweeps: this.gc.count,
-      garbageCollected: this.gc.collected,
+      // garbageSweeps: this.gc.count,
+      // garbageCollected: this.gc.collected,
     }
   }
   communicate(change) {
@@ -594,83 +594,83 @@ class JSynchronous {
       jsynchronous.send(websocket, JSON.stringify(payload));
     }
   }
-  scheduleGarbageCollect() {
-    // The gc should run some time after a property referencing a synced object is deleted or altered
+  // scheduleGarbageCollect() {
+  //   // The gc should run some time after a property referencing a synced object is deleted or altered
 
-    if (jsynchronous.gcpaused === true) { return }
+  //   if (jsynchronous.gcpaused === true) { return }
 
-    this.gc.triggers++;
+  //   this.gc.triggers++;
 
-    if (this.gc.triggers >= 1000000) {
-      this.collectGarbage();  // Force Synchronous gc every 1,000,000 changes
-    } else {
-      this.garbageCollectWhenIdle();
-    }
-  }
-  garbageCollectWhenIdle() {
-    // Garbage collect on average every 20,000ms or 20,000 changes
-    let minTimeout = Math.max(0, 20000 - this.gc.triggers);
-    if (this.gc.timeout === undefined) {
-      const now = new Date().getTime();
-      this.gc.scheduled = now;
-      this.gc.stopwatch = now;
-      this.gc.buffer = 0;
-      this.gc.target = minTimeout;
-      this.gc.timeout = setTimeout(() => this.testTimeout(), minTimeout);
-      // console.log('setting gc timeout', minTimeout);
-    } else if (this.gc.target / 16 > minTimeout) {
-      // Reset the timer for the next gc if the calculated minTimeout is 
-      if (minTimeout < 16) {
-        minTimeout = 0;
-      }
+  //   if (this.gc.triggers >= 1000000) {
+  //     this.collectGarbage();  // Force Synchronous gc every 1,000,000 changes
+  //   } else {
+  //     this.garbageCollectWhenIdle();
+  //   }
+  // }
+  // garbageCollectWhenIdle() {
+  //   // Garbage collect on average every 20,000ms or 20,000 changes
+  //   let minTimeout = Math.max(0, 20000 - this.gc.triggers);
+  //   if (this.gc.timeout === undefined) {
+  //     const now = new Date().getTime();
+  //     this.gc.scheduled = now;
+  //     this.gc.stopwatch = now;
+  //     this.gc.buffer = 0;
+  //     this.gc.target = minTimeout;
+  //     this.gc.timeout = setTimeout(() => this.testTimeout(), minTimeout);
+  //     // console.log('setting gc timeout', minTimeout);
+  //   } else if (this.gc.target / 16 > minTimeout) {
+  //     // Reset the timer for the next gc if the calculated minTimeout is 
+  //     if (minTimeout < 16) {
+  //       minTimeout = 0;
+  //     }
 
-      clearTimeout(this.gc.timeout);
-      this.gc.target = minTimeout;
-      this.gc.timeout = setTimeout(() => this.testTimeout(), minTimeout);
-      // console.log('Resetting timeout', minTimeout);
-    }
-  }
-  testTimeout() {
-    const now = new Date().getTime();
-    if (now > this.gc.scheduled + this.gc.maxTimeout) {
-      this.collectGarbage();
-    } else if (now < this.gc.stopwatch + this.gc.buffer) {
-      this.collectGarbage();
-    } else {
-      this.gc.stopwatch = new Date().getTime();
-      this.gc.buffer = this.gc.buffer + 1;
-      this.gc.timeout = setTimeout(() => this.testTimeout(), 0);
-    }
-  }
-  collectGarbage(force) {
-    // Unlike language-level garbage collection, synchronized objects can still be referenced by the app
-    // This means we can't use moving garbage collectors due to the app potentially re-referencing during sweeps
-    // This uses naive mark-sweep
+  //     clearTimeout(this.gc.timeout);
+  //     this.gc.target = minTimeout;
+  //     this.gc.timeout = setTimeout(() => this.testTimeout(), minTimeout);
+  //     // console.log('Resetting timeout', minTimeout);
+  //   }
+  // }
+  // testTimeout() {
+  //   const now = new Date().getTime();
+  //   if (now > this.gc.scheduled + this.gc.maxTimeout) {
+  //     this.collectGarbage();
+  //   } else if (now < this.gc.stopwatch + this.gc.buffer) {
+  //     this.collectGarbage();
+  //   } else {
+  //     this.gc.stopwatch = new Date().getTime();
+  //     this.gc.buffer = this.gc.buffer + 1;
+  //     this.gc.timeout = setTimeout(() => this.testTimeout(), 0);
+  //   }
+  // }
+  // collectGarbage(force) {
+  //   // Unlike language-level garbage collection, synchronized objects can still be referenced by the app
+  //   // This means we can't use moving garbage collectors due to the app potentially re-referencing during sweeps
+  //   // This uses naive mark-sweep
 
-    if (force !== true && jsynchronous.gcpaused === true) { return }
+  //   if (force !== true && jsynchronous.gcpaused === true) { return }
 
-    const marked = {...this.objects}
-    const reachable = recurse(this.root.proxy, true);
-    reachable.forEach((v) => {
-      const syncedObject = v[jsynchronous.reserved_property];
-      delete marked[syncedObject.hash];
-    });
+  //   const marked = {...this.objects}
+  //   const reachable = recurse(this.root.proxy, true);
+  //   reachable.forEach((v) => {
+  //     const syncedObject = v[jsynchronous.reserved_property];
+  //     delete marked[syncedObject.hash];
+  //   });
 
-    let piecesOfGarbage = 0;
-    for (let hash in marked) {
-      // Toss out the trash
-      piecesOfGarbage++;
-      const syncedObject = marked[hash];
-      new Deletion(this, syncedObject);
-    }
-    // console.log('Collecting garbage', piecesOfGarbage);
+  //   let piecesOfGarbage = 0;
+  //   for (let hash in marked) {
+  //     // Toss out the trash
+  //     piecesOfGarbage++;
+  //     const syncedObject = marked[hash];
+  //     new Deletion(this, syncedObject);
+  //   }
+  //   // console.log('Collecting garbage', piecesOfGarbage);
 
-    clearTimeout(this.gc.timeout);
-    this.gc.timeout = undefined;
-    this.gc.triggers = 0;
-    this.gc.collected += piecesOfGarbage;
-    this.gc.count++;
-  }
+  //   clearTimeout(this.gc.timeout);
+  //   this.gc.timeout = undefined;
+  //   this.gc.triggers = 0;
+  //   this.gc.collected += piecesOfGarbage;
+  //   this.gc.count++;
+  // }
   copy(target, visited) {
     if (visited === undefined) visited = new Map();
     if (target === undefined) target = this.root.proxy;
@@ -720,7 +720,7 @@ class JSynchronous {
       settings
     ]
 
-    const variables = recurse(this.root.proxy, true);
+    const variables = breadthFirstTraversal(this.root.proxy, true);
 
     fullState.push(variables.map((v) => {
       const syncedObject = v[jsynchronous.reserved_property];
@@ -818,18 +818,18 @@ jsynchronous.variables = () => {
   return variables;
 }
 
-jsynchronous.pausegc = () => {
-  jsynchronous.gcpaused = true;
-}
-jsynchronous.resumegc = () => {
-  jsynchronous.gcpaused = false;
-}
-jsynchronous.rungc = () => {
-  for (let name in syncedNames) {
-    const jsync = syncedNames[name];
-    jsync.collectGarbage(true);
-  }
-}
+// jsynchronous.pausegc = () => {
+//   jsynchronous.gcpaused = true;
+// }
+// jsynchronous.resumegc = () => {
+//   jsynchronous.gcpaused = false;
+// }
+// jsynchronous.rungc = () => {
+//   for (let name in syncedNames) {
+//     const jsync = syncedNames[name];
+//     jsync.collectGarbage(true);
+//   }
+// }
 
 if (typeof module === 'object') {
   module.exports = jsynchronous;
@@ -930,12 +930,12 @@ function newCollection(type, original) {
 }
 
 function alreadySynchronized(obj) {
-  return findRecursively(obj, (v) => v[jsynchronous.reserved_property]);
+  return findBreadthFirst(obj, (v) => v[jsynchronous.reserved_property]);
 }
 
 function referencesAnotherJsynchronousVariable(obj, jsync) {
   // Expects object array proxy or other enumerable.
-  return findRecursively(obj, (v) => {
+  return findBreadthFirst(obj, (v) => {
     const syncedObject = v[jsynchronous.reserved_property];
     if (syncedObject) {
       return syncedObject.jsync !== jsync
@@ -967,8 +967,31 @@ function enumerate(obj, func) {
   }
 }
 
-function recurse(obj, includeObj, terminateFunc, visited) {
+function depthFirstTraversal(obj, includeObj, terminateFunc, visited) {
   // Returns all nodes in depth first order. Returns descendants only if includeObj is false. Terminates after adding if terminateFunc returns true
+  visited = visited || new Map();
+
+  const all = [];
+  if (includeObj) {
+    visited.set(obj, true);
+  }
+
+  if (terminateFunc && terminateFunc(obj)) {
+    return [obj];
+  }
+
+  enumerate(obj, (value, prop) => {
+    if (enumerable(value) && !visited.has(value)) {
+      all.concat(depthFirstTraversal(value, true, terminateFunc, visited));
+    }
+  });
+
+  all.push(obj);
+
+  return all;
+}
+function breadthFirstTraversal(obj, includeObj, terminateFunc, visited) {
+  // Returns all nodes in breadth first order. Returns descendants only if includeObj is false. Terminates after adding if terminateFunc returns true
   visited = visited || new Map();
 
   if (includeObj) {
@@ -979,16 +1002,17 @@ function recurse(obj, includeObj, terminateFunc, visited) {
     return [...visited.keys()];
   }
 
+  const all = [];
   enumerate(obj, (value, prop) => {
     if (enumerable(value) && !visited.has(value)) {
-      recurse(value, true, terminateFunc, visited);
+      breadthFirstTraversal(value, true, terminateFunc, visited);
     }
   });
 
   return [...visited.keys()];
 }
-function findRecursively(obj, conditionFunc) {
-  const visited = recurse(obj, true, conditionFunc);
+function findBreadthFirst(obj, conditionFunc) {
+  const visited = breadthFirstTraversal(obj, true, conditionFunc);
 
   if (conditionFunc(visited[visited.length-1])) {
     return visited[visited.length-1];
@@ -1030,6 +1054,7 @@ function labelEmpty(source, target) {
 
 function encode(value, type) {
   // Expects value to be either be a primitive or a syncedObject Proxy
+  // Returns a primitive, or an synced variable hash in string form
   const encoded = [encodeType(type)];
 
   if (isPrimitive(type)) {
@@ -1063,10 +1088,14 @@ function encodeEnumerable(value) {
   return syncedObject.hash;
 }
 function getOp(number) {
-  for (const [key, value] of Object.entries(OP_ENCODINGS)) {
-    if (value === number) return key;
+  if (ENCODE) {
+    for (const [key, value] of Object.entries(OP_ENCODINGS)) {
+      if (value === number) return key;
+    }
+    return false;
+  } else {
+    return number;
   }
-  return false;
 }
 function encodeOp(op) {
   if (ENCODE) {

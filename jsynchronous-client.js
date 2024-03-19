@@ -766,7 +766,7 @@ function jsynchronousSetup() {
     if (jsync.rewind === true) {
       Object.defineProperty(targetVariable, reservedWords['$rewind'], {
         value: function $rewind(snapshot, counter) {
-console.log('Rewinding,', snapshot, counter)
+console.log('Rewinding,', snapshot, counter0)
           return rewind(jsync, snapshot, counter);
         },
         writable: true,
