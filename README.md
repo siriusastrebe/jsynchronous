@@ -257,7 +257,7 @@ $orientation.i = 0; // Will synchronize
 $orientation.j = 1; // Will synchronize
 ```
 
-We recommended you use the prefix ‘$’ or some other convention when you reference a synchronized variable to indicate that assignments to that variable will be sent over the network.
+We recommended you use the prefix ‘$’ or some other convention when you reference a synchronized variable to indicate that the variable is reactive and assignments to that variable will be sent over the network.
 
 # Documentation Reference
 
