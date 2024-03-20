@@ -1,6 +1,8 @@
 var jsynchronous;
 
 function jsynchronousSetup() {
+  var ENCODE = false;
+
   var TYPE_ENCODINGS = [
     'array',
     'object',
@@ -40,7 +42,7 @@ function jsynchronousSetup() {
 
   function onmessage(data) {
     var json = JSON.parse(data);
-    var op = OP_ENCODINGS[json[0]]; 
+    var op = decodeOp(json[0]); 
     var name = json[1];
 
     if (op === 'initial') {
@@ -140,7 +142,7 @@ function jsynchronousSetup() {
   }
 
   function newJsynchronous(name, counter, settings, data) {
-    var rootType = TYPE_ENCODINGS[data[0][1]];
+    var rootType = decodeType(data[0][1]);
     var jsync = jsyncObject(name, counter, settings);
     var reserved;
     if (settings) reserved = settings.reserved;
@@ -152,7 +154,7 @@ function jsynchronousSetup() {
     for (var i=0; i<data.length; i++) {
       var d = data[i];
       var hash = d[0];
-      var type = TYPE_ENCODINGS[d[1]];
+      var type = decodeType(d[1]);
       var each = d[2];
       var description = createSyncedVariable(hash, type, each, jsync, (i === 0)); 
 
@@ -266,7 +268,7 @@ function jsynchronousSetup() {
     jsync.objects[hash] = details;
 
     enumerate(each, type, function (prop, encoded) {
-      var t = TYPE_ENCODINGS[encoded[0]]
+      var t = decodeType(encoded[0])
       var v = encoded[1];
 
       if (isPrimitive(t)) {
@@ -320,7 +322,7 @@ function jsynchronousSetup() {
 
       if (change === null) { continue }
 
-      var op = OP_ENCODINGS[change[0]];
+      var op = decodeOp(change[0]);
       var hash = change[1];
       var details;
       var pt;
@@ -347,7 +349,7 @@ function jsynchronousSetup() {
       } else if (op === 'new') {
         var type = change[2];
         var each = change[3];
-        createSyncedVariable(hash, TYPE_ENCODINGS[type], each, jsync); 
+        createSyncedVariable(hash, decodeType(type), each, jsync); 
       } else if (op === 'end') {
         endObject(details, jsync);
       } else if (op === 'snapshot') {
@@ -389,7 +391,7 @@ function jsynchronousSetup() {
   }
   function set(details, prop, newDetails, oldDetails, jsync) {
     var object = details.variable;
-    var type = TYPE_ENCODINGS[newDetails[0]];
+    var type = decodeType(newDetails[0]);
     var value;
 
     if (isPrimitive(type)) {
@@ -400,7 +402,7 @@ function jsynchronousSetup() {
       value = childDetails.variable;
     }
 
-    var oldType = TYPE_ENCODINGS[oldDetails[0]];
+    var oldType = decodeType(oldDetails[0]);
     var oldValue;
 
     if (isPrimitive(oldType)) {
@@ -414,7 +416,7 @@ function jsynchronousSetup() {
   }
   function del(details, prop, oldDetails, jsync) {
     var object = details.variable;
-    var oldType = TYPE_ENCODINGS[oldDetails[0]];
+    var oldType = decodeType(oldDetails[0]);
     var oldValue = oldDetails[1];
 
     if (isPrimitive(oldType)) {
@@ -662,6 +664,21 @@ function jsynchronousSetup() {
       return mirror;
     }
   }
+  function decodeOp(number) {
+    if (ENCODE) {
+      return OP_ENCODINGS[number]
+    } else {
+      return number
+    }
+  }
+  function decodeType(number) {
+    if (ENCODE) {
+      return TYPE_ENCODINGS[number];
+    } else {
+      return number;
+    }
+  }
+
 
 
   function addSynchronizedVariableMethods(jsync, targetVariable, reservedWords) {
@@ -762,7 +779,7 @@ function jsynchronousSetup() {
   // ----------------------------------------------------------------
   function communicate(op, a, b, c, d) {
     var payload = []
-    payload.push(OP_ENCODINGS.indexOf(op));
+    payload.push(ENCODE ? OP_ENCODINGS.indexOf(op) : op);
     if (a !== undefined) payload.push(a);
     if (b !== undefined) payload.push(b);
     if (c !== undefined) payload.push(c);
