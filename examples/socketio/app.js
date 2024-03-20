@@ -1,6 +1,5 @@
 const express = require('express');
-const jsynchronous = require('../../jsynchronous.js');
-//const jsynchronous = require('jsynchronous.js');
+const jsynchronous = require('jsynchronous');
 const { Server } = require("socket.io");
 const path = require('path');
 
@@ -10,7 +9,7 @@ const port = 3000;
 // Jsynchronous
 jsynchronous.send = (websocket, data) => {
   websocket.emit('msg', data);
-  console.log(`${(data.length/1000).toFixed(2)} kB ${data}`);
+  console.log(`${(data.length/1000).toFixed(2)} kB`);
 }
 
 
@@ -45,6 +44,5 @@ app.get('/', (req, res) => {
 })
 
 app.get('/jsynchronous-client.js', (req, res) => {
-  // res.sendFile('/node_modules/jsynchronous/jsynchronous-client.js', {'root': __dirname});
-  res.sendFile('jsynchronous-client.js', {'root': path.join(__dirname, '../../')});
+  res.sendFile('/node_modules/jsynchronous/jsynchronous-client.js', {'root': __dirname});
 })

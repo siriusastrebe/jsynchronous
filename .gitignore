@@ -5,3 +5,4 @@ package-lock.json
 /index.html
 tests/selenium/chromedriver
 tests/selenium/geckodriver
+/examples/test
