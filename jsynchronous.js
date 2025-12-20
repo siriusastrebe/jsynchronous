@@ -12,7 +12,8 @@ const TYPE_ENCODINGS = {
   'null': 6,
   'empty': 7,
   'bigint': 8,
-  'function': 9
+  'function': 9,
+  'date': 10
 }
 
 const OP_ENCODINGS = {
@@ -882,7 +883,8 @@ function isPrimitive(detailed) {
       detailed === 'bigint'    ||
       detailed === 'null'      ||  // Although null is in ECMA an object, we'll consider it a primitive for simplicity
       detailed === 'undefined' || 
-      detailed === 'function') {   // For now, functions are just values as far as jsynchronous is concerned
+      detailed === 'function'  ||  // For now, functions are just values as far as jsynchronous is concerned
+      detailed === 'date') {
     return true;
   } else {
     return false;
@@ -1029,7 +1031,7 @@ function labelEmpty(source, target) {
 }
 
 function encode(value, type) {
-  // Expects value to be either be a primitive or a syncedObject Proxy
+  // Expects value to be either be a primitive, a date or a syncedObject Proxy
   const encoded = [encodeOp(type)];
 
   if (isPrimitive(type)) {
@@ -1053,6 +1055,7 @@ function encodePrimitive(value, type) {
   if (type === 'boolean')   return !!value ? 1 : 0;
   if (type === 'bigint')    return String(value);
   if (type === 'function')  return undefined;
+  if (type === 'date')      return value.getTime();
   throw `Jsynchronous sanity error - Primitive is unserializable ${type}, ${value}`;
 }
 function encodeEnumerable(value) {

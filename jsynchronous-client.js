@@ -13,7 +13,8 @@ function jsynchronousSetup() {
     'null',
     'empty',
     'bigint',
-    'function'
+    'function',
+    'date'
   ]
 
   var OP_ENCODINGS = [
@@ -64,7 +65,7 @@ function jsynchronousSetup() {
         if (jsynchronous.send) {
           var uniqueId = 'initial' + name;
           communicateWithBackoff(uniqueId, ['initial', name], function () {
-            console.log('Unknown jsynchronous variable, requesting initial' + name);
+            console.warn('Unknown jsynchronous variable, requesting initial' + name);
             return jsyncs[name] === undefined;
           }, 2000);
         } else {
@@ -251,9 +252,6 @@ function jsynchronousSetup() {
       hash: hash,
       type: type,
       variable: undefined,
-      descendants: {}, // key->value corresponds to descendant.hash->[properties]. Follow properties to find descendant
-      parents: {},     // key->value corresponds to parentHash->{details: parent, props: []}
-      children: {}     // key->value corresponds to childHash->{details: child, props: []}
     }
 
     if (existing && detailedType(existing.variable) === type) {
@@ -559,6 +557,8 @@ function jsynchronousSetup() {
       return null;
     } else if (type === 'function') {
       return undefined;  // Functions are, for now, read-only
+    } else if (type === 'date') {
+      return new Date(value);
     }
   }
   function detailedType(value) {
@@ -598,7 +598,8 @@ function jsynchronousSetup() {
         type === 'null'      ||
         type === 'empty'     ||
         type === 'bigint'    ||
-        type === 'function') {  // Functions are, for now, read-only
+        type === 'function'  || // Functions are, for now, read-only
+        type === 'date') {
       return true
     } else {
       return false
@@ -766,7 +767,7 @@ function jsynchronousSetup() {
       });
     }
   }
-  function triggerChanges(jsync, callback) {
+  function triggerChanges(jsync) {
     for (var j=0; j<jsync.changesEvents.length; j++) {
       var e = jsync.changesEvents[j];
       var variable = jsync.root.variable;
