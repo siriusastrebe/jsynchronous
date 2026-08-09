@@ -3,6 +3,7 @@ type Event_Changes_Callback = (data: any) => void;
 export type Synchronized_Variable<Variable_Type> = Variable_Type & {
   $on: (event: Event, callback: Event_Changes_Callback) => void;
   $ync: (websocket: any) => void;
+  $reset: (websocket: any) => void;
   $unsync: (websocket: any) => void;
 }
 
@@ -14,7 +15,8 @@ export type JysnchronousOptions = {
   client_history?: number;
   history_limit?: number;
   wait?: boolean;
-  $ync?: string;
+  $ync?: string; 
+  $reset: string;
   $unsync?: string;
   $on?: string;
   $tart?: string;

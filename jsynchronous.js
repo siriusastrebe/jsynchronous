@@ -336,12 +336,14 @@ class JSynchronous {
       $info:      options.$info      || '$info',
       $napshot:   options.$napshot   || '$napshot',
       $rewind:    options.$rewind    || '$rewind',
-      $copy:      options.$copy      || '$copy'
+      $copy:      options.$copy      || '$copy',
+      $reset:     options.$reset     || '$reset',
     }
 
     // Coerce this to refer to this jsynchronous instance
     this.reserved = {}
     this.reserved[this.defaults['$ync']]       = ((a) => this.sync(a));
+    this.reserved[this.defaults['$reset']]     = ((a) => this.reset(a));
     this.reserved[this.defaults['$unsync']]    = ((a) => this.un_sync(a));
     this.reserved[this.defaults['$on']]        = ((a) => this.on(a));
     this.reserved[this.defaults['$tart']]      = ((a) => this.start_sync(a));
@@ -524,6 +526,26 @@ class JSynchronous {
         // TODO: Change this to a warn?
         throw 'jsynchronous Error in .jsync(websocket), websocket is already being listened on: ' + websocket;
       }
+    }
+  }
+  reset(websocket) {
+    if (this.send === undefined) {
+      throw `Jsynchronous requires you to define a jsynchronous.send = (websocket, data) => {} function which will be called by jsynchronous every time data needs to be transmittied to connected clients.\nYou can also pass in as an option {send: () => {}} to jsynchronous()`;
+    }
+
+    if (websocket === undefined || websocket === null) {
+      throw "websocket is undefined or null. reset(websocket) needs websocket to be a unique identifier for a client. Either an object, a string, or number.";
+    }
+
+    if (this.wait === false) {
+      this.sendInitial(websocket);
+    }
+
+    if (this.listeners.has(websocket)) {
+      this.listeners.set(websocket, {secret: null, penalty: 0, lastMessage: 0});
+      this.sendInitial(websocket);
+    } else {
+      throw "Websocket has not been synced yet."
     }
   }
   un_sync(websocket) {
