@@ -33,6 +33,7 @@ function jsynchronousSetup() {
   var clientReservedWords = {
     '$info': true,
     '$on': true,
+    '$off': true,
     '$rewind': true,
     '$copy': true
   }
@@ -724,6 +725,23 @@ function jsynchronousSetup() {
       },
       writable: true,
     });
+
+    Object.defineProperty(targetVariable, reservedWords['$off'], { 
+      value: function $off(event, callback) {
+        if (callback === undefined) {
+          throw ".$off('" + event + "') needs to be provided a callback";
+        }
+
+        for (let i=0; i<jsync.changesEvents.length; i++) {
+          if (jsync.changesEvents[i].callback === callback) {
+            jsync.changesEvents = jsync.changesEvents.slice(0, i).concat(jsync.changesEvents.slice(i + 1));
+            i = i - 1;
+          }
+        }
+      },
+      writable: true,
+    });
+
 
     Object.defineProperty(targetVariable, reservedWords['$copy'], { 
       value: function $copy() {

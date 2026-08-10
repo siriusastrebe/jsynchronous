@@ -4,6 +4,7 @@ type Event_Changes_Callback = (data: any) => void;
 
 export type Synchronized_Variable<Variable_Type> = Variable_Type & {
   $on: (event: Event, callback: Event_Changes_Callback) => void;
+  $off: (event: Event, callback: Event_Changes_Callback) => void;
   $info: () => {
     client_history: boolean
     counter: number
