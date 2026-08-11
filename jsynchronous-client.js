@@ -150,7 +150,7 @@ function jsynchronousSetup() {
     if (settings) reserved = settings.reserved;
 
     if (jsyncs[name] && rootType === detailedType(jsyncs[name].root.variable) && !jsync.rewound) {
-      jsync.root = jsyncs[name].root;  // If init is called multiple times, just update the original
+      jsync = jsyncs[name];  // If init is called multiple times, just update the original
     }
 
     for (var i=0; i<data.length; i++) {
