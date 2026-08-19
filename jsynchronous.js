@@ -368,10 +368,6 @@ class JSynchronous {
     if (alreadySynchronized(initial)) {
       throw `Cannot synchronize a variable that references an already synchronized variable`;
     }
-
-    if (this.name.length > 127) {
-      throw `Jsynchronous name is too long. Shorter names are better for efficient networking`;
-    }
     if (syncedNames[this.name]) {
       throw `Jsynchronous name '${this.name}' is already in use!`;
     }
