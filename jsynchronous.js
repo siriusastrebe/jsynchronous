@@ -200,17 +200,17 @@ class SyncedObject {
         return obj[prop];
       },
       set(obj, prop, value) {
+        if (syncedObject.deleted === true) {
+          obj[prop] = value;  // Inert. Writes are no longer tracked or communicated
+          return true;
+        }
+
         const oldValue = obj[prop];
         const oldType = detailedType(oldValue);
         const type = detailedType(value);
 
         if (prop === 'length' && syncedObject.type === 'array' && obj.length === value) {
           return true  // Array lengths trigger every time the array is modified. We can ignore them
-        }
-
-        if (syncedObject.deleted === true) {
-          obj[prop] = value;
-          return true;
         }
 
         if (isRoot(syncedObject)) {
@@ -251,6 +251,11 @@ class SyncedObject {
         return true;
       },
       deleteProperty(obj, prop) {
+        if (syncedObject.deleted === true) {
+          delete obj[prop];  // Inert. Deletions are no longer tracked or communicated
+          return true;
+        }
+
         const value = obj[prop]
         const type = detailedType(value);
 
@@ -312,6 +317,7 @@ class JSynchronous {
     this.history_limit = options.history_limit || 100000;
     this.wait = true;  // Ignore Proxy setters during inital setup
     this.started = false;
+    this.deleted = false;
     this.history = [];
     this.snapshots = {};
     this.rewindInitial = undefined;
@@ -336,7 +342,8 @@ class JSynchronous {
       $info:      options.$info      || '$info',
       $napshot:   options.$napshot   || '$napshot',
       $rewind:    options.$rewind    || '$rewind',
-      $copy:      options.$copy      || '$copy'
+      $copy:      options.$copy      || '$copy',
+      $delete:    options.$delete    || '$delete'
     }
 
     // Coerce this to refer to this jsynchronous instance
@@ -350,6 +357,7 @@ class JSynchronous {
     this.reserved[this.defaults['$napshot']]   = ((a) => this.snapshot(a));
     this.reserved[this.defaults['$rewind']]    = ((a) => this.rewind(a));
     this.reserved[this.defaults['$copy']]      = (() => this.copy());
+    this.reserved[this.defaults['$delete']]    = (() => this.delete());
 
     this.bufferTimeout = undefined;
     this.queuedCommunications = [];
@@ -384,6 +392,7 @@ class JSynchronous {
   info() {
     return {
       wait: this.wait,
+      deleted: this.deleted,
       name: this.name,
       startTime: this.startTime,
       counter: this.counter,
@@ -668,6 +677,42 @@ class JSynchronous {
     this.gc.collected += piecesOfGarbage;
     this.gc.count++;
   }
+  delete() {
+    this.deleted = true;
+
+    if (this.bufferTimeout !== undefined) {
+      clearTimeout(this.bufferTimeout);
+      this.bufferTimeout = undefined;
+    }
+
+    if (this.gc.timeout !== undefined) {
+      clearTimeout(this.gc.timeout);
+      this.gc.timeout = undefined;
+    }
+
+    this.listeners.clear();
+
+    if (syncedNames[this.name] === this) {
+      delete syncedNames[this.name];
+    }
+
+    for (let hash in this.objects) {
+      const syncedObject = this.objects[hash];
+      syncedObject.deleted = true;
+      syncedObject.jsync = undefined;
+    }
+
+    this.objects = {};
+    this.root = undefined;
+    this.rewindInitial = undefined;
+    this.cachedDescription = undefined;
+    this.snapshots = {};
+    this.history.length = 0;
+    this.queuedCommunications.length = 0;
+    this.reserved = {};
+
+    return true;
+  }
   copy(target, visited) {
     if (visited === undefined) visited = new Map();
     if (target === undefined) target = this.root.proxy;
@@ -813,6 +858,15 @@ jsynchronous.variables = () => {
     variables[name] = syncedNames[name].root.proxy;
   }
   return variables;
+}
+jsynchronous.delete = (name) => {
+  const jsync = syncedNames[name || ''];
+
+  if (jsync === undefined) {
+    return false;
+  }
+
+  return jsync.delete();
 }
 
 jsynchronous.pausegc = () => {

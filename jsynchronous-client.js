@@ -113,7 +113,7 @@ function jsynchronousSetup() {
     return Object.keys(jsyncs);
   }
 
-  function jsyncObject(name, counter, settings, standIn) {
+  function newJsyncObject(name, counter, settings, standIn) {
     var jsync = {
       name: name,
       counter: counter,  // Counter will always be 1 above the last packet
@@ -143,14 +143,32 @@ function jsynchronousSetup() {
     return jsync;
   }
 
+  function replaceJsyncObject(jsync, counter, settings) {
+    jsync.counter = counter;
+    jsync.storedChanges = [];
+    jsync.staging.references.length = 0;
+    jsync.secret = undefined;
+    jsync.startTime = new Date().getTime();
+    jsync.rewind = settings.rewind || false;
+    jsync.one_way = settings.one_way || false;
+    jsync.client_history = settings.client_history || false;
+    jsync.objects = {};
+    if (settings.rewound) {
+      jsync.rewound = settings.rewound;
+      jsync.history = [];
+    }
+    return jsync;
+  }
+
   function newJsynchronous(name, counter, settings, data) {
     var rootType = decodeType(data[0][1]);
-    var jsync = jsyncObject(name, counter, settings);
+    var jsync = newJsyncObject(name, counter, settings);
     var reserved;
     if (settings) reserved = settings.reserved;
 
     if (jsyncs[name] && rootType === detailedType(jsyncs[name].root.variable) && !jsync.rewound) {
-      jsync = jsyncs[name];  // If init is called multiple times, just update the original
+      jsync = replaceJsyncObject(jsyncs[name], counter, settings);
+      console.log('Init called mulitple times', name);
     }
 
     for (var i=0; i<data.length; i++) {
@@ -194,7 +212,7 @@ function jsynchronousSetup() {
     if (standIns[name]) {
       return standIns[name].variable;
     } else {
-      standIns[name] = jsyncObject(name, -1, {}, true);
+      standIns[name] = newJsyncObject(name, -1, {}, true);
 
       if (detailedType(type) === 'array') {
         type = 'array';
@@ -300,7 +318,11 @@ function jsynchronousSetup() {
 
 
   function processChanges(minCounter, maxCounter, changes, jsync) {
-    if (minCounter < jsync.counter) {
+    console.log('Processing changes for ', jsync.name, jsync.changesEvents.length);
+
+    if (minCounter === 0 && jsync.counter > 0) {
+      
+    } else if (minCounter < jsync.counter) {
       console.error("Jsynchronous duplicate receipt of changes, expected " + jsync.counter + ", got " + minCounter);
       // throw "Jsynchronous duplicate receipt of changes, expected " + jsync.counter + ", got " + minCounter;
     } else if (minCounter > jsync.counter) {

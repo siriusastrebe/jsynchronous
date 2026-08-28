@@ -316,6 +316,15 @@ jsynchronous.variables();
 
 Returns an object with key->value corresponding to name->synchronized variable.
 
+### delete
+
+```javascript
+// Server side
+jsynchronous.delete(name);
+```
+
+Deletes the synchronized variable registered under `name`, and deregisters all listeners
+
 ### Garbage Collection
 ```
 jsynchronous.pausegc(); // Pauses jsynchronous garbage collection
@@ -414,6 +423,12 @@ Server only. A list of websockets you passed into calls to .$ync()
 ```
 
 Server only. Creates a snapshot, used in Rewind mode. Name can be a number or a string.
+
+```javascript
+.$delete()
+```
+
+Server only. Permanently deletes the synchronized variable. The name is released for re-use, `$ync`'ed clients are dropped.
 
 ```javascript
 .$rewind(name, [counter])

@@ -4,6 +4,7 @@ export type Synchronized_Variable<Variable_Type> = Variable_Type & {
   $on: (event: Event, callback: Event_Changes_Callback) => void;
   $ync: (websocket: any) => void;
   $unsync: (websocket: any) => void;
+  $delete: () => boolean;
 }
 
 export type JysnchronousOptions = {
@@ -23,6 +24,7 @@ export type JysnchronousOptions = {
   $napshot?: string;
   $rewind?: string;
   $copy?: string;
+  $delete?: string;
 }
 
 export type Jsynchronous = {
@@ -30,6 +32,7 @@ export type Jsynchronous = {
   send: (websocket: any, data: any) => void;
   onmessage: (websocket: any, data: any) => void;
   list: () => string[];
+  delete: (name?: string) => boolean;
   variables: () => { [key: string]: Synchronized_Variable<Variable_Type> };
   pausegc: () => void;
   resumegc: () => void;
