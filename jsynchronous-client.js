@@ -318,8 +318,6 @@ function jsynchronousSetup() {
 
 
   function processChanges(minCounter, maxCounter, changes, jsync) {
-    console.log('Processing changes for ', jsync.name, jsync.changesEvents.length);
-
     if (minCounter === 0 && jsync.counter > 0) {
       
     } else if (minCounter < jsync.counter) {

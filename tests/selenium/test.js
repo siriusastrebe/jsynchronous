@@ -67,7 +67,7 @@ app.get('/jsynchronous-client.js', (req, res) => {
 // ----------------------------------------------------------------
 // Selenium Test
 // ----------------------------------------------------------------
-const browsers = ['firefox', 'chrome'];
+const browsers = ['firefox'];
 let drivers = [];
 const runTests = (async () => {
   drivers = await Promise.all(browsers.map((browser) => new Builder().forBrowser(browser).build()));

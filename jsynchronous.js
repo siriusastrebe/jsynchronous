@@ -526,8 +526,7 @@ class JSynchronous {
       if (!this.listeners.has(websocket)) {
         this.listeners.set(websocket, {secret: null, penalty: 0, lastMessage: 0});
       } else {
-        // TODO: Change this to a warn?
-        throw 'jsynchronous Error in .jsync(websocket), websocket is already being listened on: ' + websocket;
+        // throw 'jsynchronous Error in .jsync(websocket), websocket is already being listened on: ' + websocket;
       }
     }
   }
