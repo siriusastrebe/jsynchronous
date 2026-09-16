@@ -535,7 +535,7 @@ class JSynchronous {
       this.listeners.delete(websocket);
     } else {
       // TODO: Change this to a warn?
-      throw 'jsynchronous Error in .unsync(websocket), no websocket registered that matches ' + websocket;
+      // throw 'jsynchronous Error in .unsync(websocket), no websocket registered that matches ' + websocket;
     }
   }
   snapshot(name) {
